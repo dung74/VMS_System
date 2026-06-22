@@ -1,0 +1,262 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AI VMS Dashboard</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        @keyframes pulse-red { 0%, 100% { opacity: 1; } 50% { opacity: 0.5; } }
+        .live-indicator { animation: pulse-red 1.5s infinite; }
+    </style>
+</head>
+<body class="bg-gray-900 text-gray-100 font-sans min-h-screen">
+
+    <header class="bg-gray-800 border-b border-gray-700 p-4 shadow-md">
+        <div class="max-w-7xl mx-auto flex justify-between items-center">
+            <h1 class="text-2xl font-bold text-blue-400">🛡️ AI VMS Management</h1>
+            <div class="text-sm text-gray-400">PostgreSQL + FastAPI + WebRTC</div>
+        </div>
+    </header>
+
+    <main class="max-w-7xl mx-auto p-6 grid grid-cols-1 lg:grid-cols-3 gap-6">
+        
+        <div class="space-y-6">
+            
+            <div class="bg-gray-800 p-5 rounded-xl border border-gray-700 shadow-lg">
+                <h2 class="text-lg font-semibold text-green-400 mb-4 border-b border-gray-700 pb-2">📦 Thêm AI Model</h2>
+                <form id="form-model" onsubmit="addModel(event)" class="space-y-3 text-sm">
+                    <input type="text" id="m_name" placeholder="Tên Model (VD: YOLOv8 Face)" class="w-full bg-gray-900 border border-gray-600 rounded p-2 focus:border-green-400 outline-none" required>
+                    <div class="grid grid-cols-2 gap-2">
+                        <input type="text" id="m_version" placeholder="Version (VD: v1.0)" class="bg-gray-900 border border-gray-600 rounded p-2 outline-none" required>
+                        <input type="text" id="m_task" placeholder="Task (VD: detection)" value="detection" class="bg-gray-900 border border-gray-600 rounded p-2 outline-none">
+                    </div>
+                    <input type="text" id="m_path" placeholder="File Path (VD: models/best.pt)" class="w-full bg-gray-900 border border-gray-600 rounded p-2 outline-none" required>
+                    <button type="submit" class="w-full bg-green-600 hover:bg-green-500 text-white font-bold py-2 rounded transition-colors">Lưu Model</button>
+                </form>
+            </div>
+
+            <div class="bg-gray-800 p-5 rounded-xl border border-gray-700 shadow-lg">
+                <h2 class="text-lg font-semibold text-blue-400 mb-4 border-b border-gray-700 pb-2">📹 Thêm Camera</h2>
+                <form id="form-camera" onsubmit="addCamera(event)" class="space-y-3 text-sm">
+                    <input type="text" id="c_id" placeholder="Mã Camera (VD: cam_01)" class="w-full bg-gray-900 border border-gray-600 rounded p-2 outline-none" required>
+                    <input type="text" id="c_name" placeholder="Tên hiển thị (VD: Cam Cửa Ra Vào)" class="w-full bg-gray-900 border border-gray-600 rounded p-2 outline-none" required>
+                    <input type="text" id="c_source" placeholder="Source (VD: 0 hoặc rtsp://...)" class="w-full bg-gray-900 border border-gray-600 rounded p-2 outline-none" required>
+                    <input type="text" id="c_location" placeholder="Vị trí (VD: Sảnh A)" class="w-full bg-gray-900 border border-gray-600 rounded p-2 outline-none">
+                    
+                    <select id="c_model_id" class="w-full bg-gray-900 border border-gray-600 rounded p-2 outline-none text-white" required>
+                        <option value="">-- Chọn AI Model --</option>
+                        </select>
+
+                    <button type="submit" class="w-full bg-blue-600 hover:bg-blue-500 text-white font-bold py-2 rounded transition-colors">Lưu Camera</button>
+                </form>
+            </div>
+        </div>
+
+        <div class="lg:col-span-2 space-y-6">
+            
+            <div class="bg-gray-800 p-5 rounded-xl border border-gray-700 shadow-lg">
+                <h2 class="text-lg font-semibold text-yellow-400 mb-4 border-b border-gray-700 pb-2 flex justify-between">
+                    <span>📋 Danh sách Camera trong Database</span>
+                    <button onclick="loadCameras()" class="text-sm bg-gray-700 hover:bg-gray-600 px-3 py-1 rounded text-white">🔄 Làm mới</button>
+                </h2>
+                <div class="overflow-x-auto">
+                    <table class="w-full text-left text-sm text-gray-400">
+                        <thead class="text-xs text-gray-300 uppercase bg-gray-700">
+                            <tr>
+                                <th class="px-4 py-2 rounded-tl-lg">Mã ID</th>
+                                <th class="px-4 py-2">Tên & Vị trí</th>
+                                <th class="px-4 py-2 text-center rounded-tr-lg">Hành động</th>
+                            </tr>
+                        </thead>
+                        <tbody id="camera-list">
+                            </tbody>
+                    </table>
+                </div>
+            </div>
+
+            <div class="bg-gray-800 p-5 rounded-xl border border-gray-700 shadow-lg">
+                <h2 class="text-lg font-semibold text-purple-400 mb-4 border-b border-gray-700 pb-2">🔴 Live Video Wall</h2>
+                <div id="video-wall" class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <p class="text-gray-500 italic col-span-full">Chưa có luồng video nào được kết nối.</p>
+                </div>
+            </div>
+
+        </div>
+    </main>
+
+    <script>
+        // Khi tải trang, lấy dữ liệu Model và Camera từ DB
+        document.addEventListener('DOMContentLoaded', () => {
+            loadModels();
+            loadCameras();
+        });
+
+        // ==========================================
+        // 1. QUẢN LÝ MODEL
+        // ==========================================
+        async function loadModels() {
+            try {
+                const res = await fetch('/models');
+                const models = await res.json();
+                const selectEl = document.getElementById('c_model_id');
+                selectEl.innerHTML = '<option value="">-- Chọn AI Model --</option>';
+                models.forEach(m => {
+                    selectEl.innerHTML += `<option value="${m.id}">${m.name} (${m.version})</option>`;
+                });
+            } catch (err) { console.error("Lỗi tải Models:", err); }
+        }
+
+        async function addModel(e) {
+            e.preventDefault();
+            // Cấu trúc query params do API của bạn định nghĩa
+            const params = new URLSearchParams({
+                name: document.getElementById('m_name').value,
+                version: document.getElementById('m_version').value,
+                file_path: document.getElementById('m_path').value,
+                task_type: document.getElementById('m_task').value
+            });
+
+            try {
+                const res = await fetch(`/add_model?${params.toString()}`, { method: 'POST' });
+                if(res.ok) {
+                    alert("✅ Thêm Model thành công!");
+                    document.getElementById('form-model').reset();
+                    loadModels(); // Cập nhật dropdown
+                } else { alert("❌ Lỗi khi thêm Model"); }
+            } catch (err) { console.error(err); }
+        }
+
+        // ==========================================
+        // 2. QUẢN LÝ CAMERA CƠ SỞ DỮ LIỆU
+        // ==========================================
+        async function loadCameras() {
+            try {
+                const res = await fetch('/cameras');
+                const cameras = await res.json();
+                const tbody = document.getElementById('camera-list');
+                tbody.innerHTML = '';
+
+                if (cameras.length === 0) {
+                    tbody.innerHTML = '<tr><td colspan="3" class="text-center py-4">Chưa có camera nào.</td></tr>';
+                    return;
+                }
+
+                cameras.forEach(c => {
+                    tbody.innerHTML += `
+                        <tr class="border-b border-gray-700 hover:bg-gray-750">
+                            <td class="px-4 py-3 font-medium text-white">${c.camera_id}</td>
+                            <td class="px-4 py-3">${c.name} <br> <span class="text-xs text-gray-500">📍 ${c.location}</span></td>
+                            <td class="px-4 py-3 text-center space-x-2">
+                                <button onclick="startBackendCamera('${c.camera_id}')" class="bg-yellow-600 hover:bg-yellow-500 text-white px-3 py-1 rounded text-xs transition">1. Bật AI</button>
+                                <button onclick="createVideoBox('${c.camera_id}')" class="bg-purple-600 hover:bg-purple-500 text-white px-3 py-1 rounded text-xs transition">2. Xem Live</button>
+                                <button onclick="deleteCamera('${c.camera_id}')" class="bg-red-600 hover:bg-red-500 text-white px-3 py-1 rounded text-xs transition">Xóa</button>
+                            </td>
+                        </tr>
+                    `;
+                });
+            } catch (err) { console.error("Lỗi tải Cameras:", err); }
+        }
+
+        async function addCamera(e) {
+            e.preventDefault();
+            const params = new URLSearchParams({
+                camera_id: document.getElementById('c_id').value,
+                name: document.getElementById('c_name').value,
+                source: document.getElementById('c_source').value,
+                location: document.getElementById('c_location').value,
+                model_id: document.getElementById('c_model_id').value
+            });
+
+            try {
+                const res = await fetch(`/add_camera?${params.toString()}`, { method: 'POST' });
+                if(res.ok) {
+                    alert("✅ Thêm Camera thành công!");
+                    document.getElementById('form-camera').reset();
+                    loadCameras();
+                } else { alert("❌ Lỗi khi thêm Camera"); }
+            } catch (err) { console.error(err); }
+        }
+
+        async function deleteCamera(cam_id) {
+            if(!confirm(`Bạn có chắc muốn xóa ${cam_id}?`)) return;
+            try {
+                const res = await fetch(`/delete_camera/${cam_id}`, { method: 'POST' });
+                if(res.ok) { loadCameras(); }
+            } catch (err) { console.error(err); }
+        }
+
+        // ==========================================
+        // 3. ĐIỀU KHIỂN LUỒNG AI & WEBRTC
+        // ==========================================
+        async function startBackendCamera(cam_id) {
+            try {
+                const res = await fetch(`/start_camera/${cam_id}`, { method: 'POST' });
+                const data = await res.json();
+                alert(`🚀 Hệ thống phản hồi: ${data.message || data}`);
+            } catch (err) { alert("Lỗi khi gọi API khởi động Camera"); }
+        }
+
+        // Tạo khung Video trên Web và kết nối WebRTC
+        function createVideoBox(cam_id) {
+            const wall = document.getElementById('video-wall');
+            
+            // Xóa dòng "Chưa có luồng..." nếu đang hiển thị
+            if(wall.innerHTML.includes('Chưa có luồng')) { wall.innerHTML = ''; }
+
+            // Nếu ô video của cam này chưa tồn tại, tạo mới
+            if(!document.getElementById(`vid-box-${cam_id}`)) {
+                const boxHtml = `
+                    <div id="vid-box-${cam_id}" class="bg-black rounded border border-gray-600 overflow-hidden relative shadow-lg">
+                        <div class="absolute top-2 left-2 bg-black bg-opacity-70 px-2 py-1 rounded flex items-center z-10 text-xs">
+                            <span class="w-2 h-2 rounded-full bg-red-500 mr-2 live-indicator"></span> 
+                            <span class="font-bold">${cam_id}</span>
+                        </div>
+                        <video id="video-${cam_id}" class="w-full h-48 object-cover" autoplay playsinline muted></video>
+                    </div>
+                `;
+                wall.insertAdjacentHTML('beforeend', boxHtml);
+            }
+
+            // Kết nối WebRTC
+            connectWebRTC(cam_id, `video-${cam_id}`);
+        }
+
+        async function connectWebRTC(cam_id, videoElementId) {
+            const videoElement = document.getElementById(videoElementId);
+            const pc = new RTCPeerConnection();
+
+            pc.addEventListener('track', (evt) => {
+                if (evt.track.kind === 'video') {
+                    videoElement.srcObject = evt.streams[0];
+                    console.log(`Đã nhận luồng từ ${cam_id}`);
+                }
+            });
+
+            pc.addTransceiver('video', { direction: 'recvonly' });
+
+            try {
+                const offer = await pc.createOffer();
+                await pc.setLocalDescription(offer);
+
+                const response = await fetch(`/offer/${cam_id}`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ sdp: pc.localDescription.sdp, type: pc.localDescription.type })
+                });
+
+                if (!response.ok) {
+                    throw new Error("Không thể kết nối. Có thể Camera chưa được Bật AI.");
+                }
+
+                const answer = await response.json();
+                await pc.setRemoteDescription(answer);
+
+            } catch (error) {
+                console.error("Lỗi WebRTC: ", error);
+                alert(`Không thể kết nối Video ${cam_id}. Nhớ bấm nút 'Bật AI' trước nhé!`);
+            }
+        }
+    </script>
+</body>
+</html>

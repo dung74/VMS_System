@@ -1,0 +1,61 @@
+from ultralytics import YOLO
+import cv2
+
+COLOR_PERSON = (0, 255, 0)
+COLOR_CARD = (0, 0, 255)
+
+class ModelPredictor:
+    def __init__(self, model):
+        self.model = model
+        self.CLASS_PERSON = 2
+        self.CLASS_CARD = 3
+
+
+
+    
+    def draw_bounding_boxes(self, frame, results):
+        detections = []
+        for r in results:
+            for box in r.boxes:
+
+                cls_id = int(box.cls[0])
+                conf = float(box.conf[0])
+                x1, y1, x2, y2 = box.xyxy[0].cpu().numpy().astype(int)
+                if cls_id == self.CLASS_PERSON:
+                    
+                    cv2.rectangle(frame, (int(x1), int(y1)), (int(x2), int(y2)), COLOR_PERSON, 2)
+                    cv2.putText(frame, f'Person {conf:.2f}', (int(x1), int(y1) - 10), cv2.FONT_HERSHEY_SIMPLEX, 0.5, COLOR_PERSON, 2)
+                elif cls_id == self.CLASS_CARD:
+                    cv2.rectangle(frame, (int(x1), int(y1)), (int(x2), int(y2)), COLOR_CARD, 2)
+                    cv2.putText(frame, f'Card {conf:.2f}', (int(x1), int(y1) - 10), cv2.FONT_HERSHEY_SIMPLEX, 0.5, COLOR_CARD, 2)
+        
+                detections.append({
+                    "class_id": cls_id,
+                    "confidence": conf,
+                    "bbox": [int(x1), int(y1), int(x2), int(y2)]
+                })
+        return frame, detections
+    
+
+    def predict_frame(self, frame_reader):
+
+        frame = frame_reader
+        
+
+        if frame is None:
+            return None
+        results = self.model.predict(
+            frame,
+            conf=0.5,
+            iou=0.5,
+            classes = [self.CLASS_PERSON, self.CLASS_CARD],
+            verbose=False,
+            device='cpu'
+        )
+
+        result_frame, detections = self.draw_bounding_boxes(frame, results)
+        
+
+        return result_frame, detections
+
+

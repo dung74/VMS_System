@@ -1,0 +1,183 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Hệ Thống Kiểm Soát An Ninh Biên AI</title>
+    <style>
+        body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; margin: 0; padding: 20px; background-color: #f0f2f5; color: #333; }
+        .wrapper { max-width: 1200px; margin: 0 auto; display: block; }
+        .header { background-color: #1e293b; color: white; padding: 15px 20px; border-radius: 8px; margin-bottom: 20px; }
+        .main-content { display: block; }
+        .camera-card { background: white; padding: 15px; border-radius: 8px; box-shadow: 0 4px 6px rgba(0,0,0,0.05); margin-bottom: 20px; text-align: center; }
+        .camera-stream { width: 100%; max-width: 720px; border-radius: 6px; border: 3px solid #f1f5f9; }
+        .log-card { background: white; padding: 20px; border-radius: 8px; box-shadow: 0 4px 6px rgba(0,0,0,0.05); }
+        /* .log-title { border-bottom: 2px solid #e2e8f0; padding-bottom: 10px; margin-top: 0; color: #0f172a; } */
+        .log-item { padding: 12px; border-bottom: 1px solid #f1f5f9; list-style-type: none; font-size: 14px; }
+        .log-item.danger { color: #dc2626; background-color: #fef2f2; border-left: 4px solid #dc2626; }
+        ul { padding-left: 0; margin: 0; }
+        .log-header-container { 
+            display: flex; justify-content: space-between; align-items: center; 
+            border-bottom: 2px solid #e2e8f0; padding-bottom: 10px; margin-bottom: 15px;
+        }
+        .log-title { border-bottom: none; padding-bottom: 0; margin-top: 0; color: #0f172a; }
+        .btn-update {
+            background-color: #3b82f6; color: white; border: none; 
+            padding: 8px 15px; border-radius: 6px; cursor: pointer; 
+            font-size: 14px; font-weight: bold; transition: background 0.2s;
+        }
+        .btn-update:hover { background-color: #2563eb; }
+        /* Nút Tắt/Bật AI */
+        .btn-toggle {
+            border: none; padding: 10px 20px; border-radius: 6px; cursor: pointer; 
+            font-size: 15px; font-weight: bold; color: white; transition: background 0.3s;
+            margin-bottom: 15px; display: inline-block;
+        }
+        .btn-toggle.on { background-color: #ef4444; } /* Màu đỏ để Tắt */
+        .btn-toggle.off { background-color: #10b981; } /* Màu xanh lá để Bật */
+    </style>
+</head>
+<body>
+    <div class="wrapper">
+        <div class="nav-bar" style="background: #1e293b; padding: 10px 20px; border-radius: 8px; margin-bottom: 20px; display: flex; justify-content: space-between; align-items: center;">
+            <div style="display: flex; gap: 15px;">
+                <a href="{% url 'dashboard' %}" style="color: {% if request.resolver_match.url_name == 'dashboard' %}white; border-bottom: 2px solid white;{% else %}#cbd5e1;{% endif %} text-decoration: none; font-weight: bold; font-size: 15px;">📺 Live Dashboard</a>
+                
+                <a href="{% url 'history' %}" style="color: {% if request.resolver_match.url_name == 'history' %}white; border-bottom: 2px solid white;{% else %}#cbd5e1;{% endif %} text-decoration: none; font-weight: bold; font-size: 15px;">📅 Quản Lý Lịch Sử</a>
+                
+                <a href="{% url 'video_history' %}" style="color: {% if request.resolver_match.url_name == 'video_history' %}white; border-bottom: 2px solid white;{% else %}#cbd5e1;{% endif %} text-decoration: none; font-weight: bold; font-size: 15px;">📼 Băng Ghi Hình (Video)</a>
+            </div>
+            
+            <div style="display: flex; align-items: center; gap: 15px; color: white;">
+                <span style="font-size: 14px;">Xin chào, <strong>{{ request.session.account_name }}</strong>!</span>
+                
+                <a href="{% url 'change_password' %}" style="color: #cbd5e1; text-decoration: none; font-size: 13px; font-weight: bold;">🔑 Đổi Mật Khẩu</a>
+                
+                <a href="{% url 'logout' %}" style="background: #ef4444; color: white; padding: 5px 12px; border-radius: 4px; text-decoration: none; font-size: 13px; font-weight: bold;">Đăng Xuất</a>
+            </div>
+        </div>
+        <div class="header">
+            <h1 style="margin:0; font-size:24px;">Hệ Thống Giám Sát Đeo Thẻ Nhân Viên Toàn Diện</h1>
+        </div>
+        
+        <div class="main-content">
+            <div class="camera-card">
+                <h3 style="margin-top:0; text-align:left; color:#475569;">Luồng Live Cam Từ Thiết Bị Biên</h3>
+                <div style="text-align: left;">
+                    <button id="toggleAiBtn" onclick="toggleAI()" class="btn-toggle {% if is_detecting %}on{% else %}off{% endif %}">
+                        {% if is_detecting %}🛑 Tắt Nhận Diện AI{% else %}▶️ Bật Lại Nhận Diện AI{% endif %}
+                    </button>
+                    <button id="toggleRecordBtn" onclick="toggleRecording()" class="btn-toggle {% if is_recording %}on{% else %}off{% endif %}" style="background-color: {% if is_recording %}#ef4444{% else %}#10b981{% endif %}; color: white; border: none; padding: 10px 15px; border-radius: 6px; cursor: pointer; font-weight: bold;">
+                        {% if is_recording %}⏹️ Dừng Ghi Hình (Đang Quay){% else %}⏺️ Bắt Đầu Ghi Hình{% endif %}
+                    </button>
+                </div>
+                <img class="camera-stream" src="{% url 'video_feed' %}" alt="Live Monitoring Stream">
+            </div>
+
+            <div class="log-card">
+                <div class="log-header-container">
+                    <h3 class="log-title">Nhật Ký Vi Phạm Hệ Thống</h3>
+                    <button onclick="refreshLogs()" class="btn-update">🔄 Cập Nhật Log</button>
+                </div>
+                
+                <ul id="log-list">
+                    {% for log in logs %}
+                        <li class="log-item danger">
+                            <strong>{{ log.get_violation_type_display }}</strong> - {{ log.timestamp|date:"H:i:s d/m/Y" }}
+                            
+                            {% if log.image_path %}
+                                <a href="/media/{{ log.image_path }}" target="_blank" style="float: right; color: #3b82f6; text-decoration: none; font-weight: bold;">🖼️ Xem ảnh bằng chứng</a>
+                            {% endif %}
+                        </li>
+                    {% empty %}
+                        <li class="log-item" style="color: #64748b;">Hiện tại chưa phát hiện trường hợp vi phạm nào.</li>
+                    {% endfor %}
+                </ul>
+            </div>
+        </div>
+    </div>
+    <script>
+        function refreshLogs() {
+            // Thay đổi text của nút để báo hiệu đang tải
+            const btn = document.querySelector('.btn-update');
+            btn.innerHTML = '⏳ Đang tải...';
+            
+            // Gọi API ngầm lên Server
+            fetch("{% url 'api_latest_logs' %}")
+                .then(response => response.json())
+                .then(data => {
+                    const logList = document.getElementById('log-list');
+                    logList.innerHTML = ''; // Xóa sạch danh sách cũ
+                    
+                    if (data.logs.length === 0) {
+                        logList.innerHTML = '<li class="log-item" style="color: #64748b;">Hiện tại chưa phát hiện trường hợp vi phạm nào.</li>';
+                    } else {
+                        // In danh sách mới nhận được ra HTML
+                       // Thay thế đoạn append cũ trong file dashboard.html bằng đoạn mã sinh giao diện này:
+                        data.logs.forEach(log => {
+                            let actionLink = log.image_url !== '#' 
+                                ? `<a href="${log.image_url}" target="_blank" style="float: right; color: #3b82f6; text-decoration: none; font-weight: bold;">🖼️ Xem ảnh bằng chứng</a>`
+                                : '';
+                                
+                            logList.innerHTML += `
+                                <li class="log-item danger">
+                                    <strong>${log.type}</strong> - ${log.timestamp}
+                                    ${actionLink}
+                                </li>
+                            `;
+                        });
+                    }
+                    // Trả lại trạng thái nút
+                    btn.innerHTML = '🔄 Cập Nhật Log';
+                })
+                .catch(error => {
+                    console.error('Lỗi khi lấy dữ liệu:', error);
+                    btn.innerHTML = '⚠️ Lỗi!';
+                    setTimeout(() => btn.innerHTML = '🔄 Cập Nhật Log', 2000);
+                });
+        }
+        function toggleAI() {
+            const btn = document.getElementById('toggleAiBtn');
+            btn.innerHTML = '⏳ Đang xử lý...';
+            
+            // Gọi API đổi trạng thái
+            fetch("{% url 'toggle_detect' %}")
+                .then(response => response.json())
+                .then(data => {
+                    // Nếu hệ thống đang bật AI (is_detecting == true)
+                    if (data.is_detecting) {
+                        btn.className = 'btn-toggle on';
+                        btn.innerHTML = '🛑 Tắt Nhận Diện AI';
+                    } 
+                    // Nếu hệ thống đã tắt AI
+                    else {
+                        btn.className = 'btn-toggle off';
+                        btn.innerHTML = '▶️ Bật Lại Nhận Diện AI';
+                    }
+                })
+                .catch(error => {
+                    console.error('Lỗi khi tắt/bật AI:', error);
+                    btn.innerHTML = '⚠️ Lỗi kết nối';
+                });
+        }
+        // Hàm gọi API Tắt/Bật Ghi hình
+    function toggleRecording() {
+        fetch("{% url 'toggle_recording' %}")
+            .then(response => response.json())
+            .then(data => {
+                const btn = document.getElementById('toggleRecordBtn');
+                if (data.is_recording) {
+                    btn.innerHTML = "⏹️ Dừng Ghi Hình (Đang Quay)";
+                    btn.style.backgroundColor = "#ef4444"; // Đỏ
+                } else {
+                    btn.innerHTML = "⏺️ Bắt Đầu Ghi Hình";
+                    btn.style.backgroundColor = "#10b981"; // Xanh
+                }
+            });
+    }
+        // --- TÍNH NĂNG NÂNG CAO ---
+        // Bỏ comment dòng dưới đây nếu bạn muốn hệ thống TỰ ĐỘNG CẬP NHẬT log mỗi 3 giây
+        // setInterval(refreshLogs, 3000); 
+    </script>
+</body>
+</html>

@@ -1,0 +1,405 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Hệ thống Giám sát Trung tâm - Cloud VMS</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        @keyframes pulse-red { 0%, 100% { opacity: 1; } 50% { opacity: 0.5; } }
+        .live-indicator { animation: pulse-red 1.5s infinite; }
+        ::-webkit-scrollbar { width: 6px; }
+        ::-webkit-scrollbar-track { background: #1f2937; }
+        ::-webkit-scrollbar-thumb { background: #4b5563; border-radius: 3px; }
+    </style>
+</head>
+<body class="bg-gray-950 text-gray-100 font-sans min-h-screen flex flex-col">
+
+    <header class="bg-gray-900 border-b border-gray-800 shadow-xl px-6 py-4 flex justify-between items-center sticky top-0 z-50">
+        <div class="flex items-center space-x-3">
+            <span class="text-3xl">🛡️</span>
+            <div>
+                <h1 class="text-xl font-bold bg-gradient-to-r from-blue-400 to-purple-500 bg-clip-text text-transparent">AI VMS CLOUD PLATFORM</h1>
+                <p class="text-xs text-gray-500">Hệ thống Điều phối & Quản lý Camera Phân tán</p>
+            </div>
+        </div>
+        <div class="flex items-center space-x-4">
+            <div class="bg-gray-800 border border-gray-700 px-3 py-1.5 rounded-lg text-xs flex items-center space-x-2">
+                <span class="w-2.5 h-2.5 rounded-full bg-green-500 inline-block"></span>
+                <span class="font-medium text-gray-300">Edge ID: edge_node_1</span>
+            </div>
+        </div>
+    </header>
+
+    <main class="flex-1 max-w-7xl w-full mx-auto p-6 grid grid-cols-1 xl:grid-cols-3 gap-6">
+        
+        <div class="space-y-6">
+            
+            <div class="bg-gray-900 p-5 rounded-2xl border border-gray-800 shadow-lg">
+                <div class="flex items-center space-x-2 mb-4 border-b border-gray-800 pb-2">
+                    <span class="text-lg">📦</span>
+                    <h2 class="text-base font-semibold text-purple-400">Đăng ký AI Model mới</h2>
+                </div>
+                <form id="form-model" onsubmit="addModel(event)" class="space-y-3 text-sm">
+                    <div>
+                        <label class="block text-xs text-gray-500 mb-1">Tên mô hình</label>
+                        <input type="text" id="m_name" placeholder="Ví dụ: YOLOv8 PPE Detection" class="w-full bg-gray-950 border border-gray-800 rounded-lg p-2.5 text-gray-200 focus:border-purple-500 focus:ring-1 focus:ring-purple-500 outline-none transition-all" required>
+                    </div>
+                    <div class="grid grid-cols-2 gap-3">
+                        <div>
+                            <label class="block text-xs text-gray-500 mb-1">Phiên bản</label>
+                            <input type="text" id="m_version" placeholder="v1.0.0" class="w-full bg-gray-950 border border-gray-800 rounded-lg p-2.5 text-gray-200 outline-none focus:border-purple-500" required>
+                        </div>
+                        <div>
+                            <label class="block text-xs text-gray-500 mb-1">Loại tác vụ</label>
+                            <input type="text" id="m_task" value="detection" class="w-full bg-gray-950 border border-gray-800 rounded-lg p-2.5 text-gray-400 outline-none" readonly>
+                        </div>
+                    </div>
+                    <div>
+                        <label class="block text-xs text-gray-500 mb-1">Đường dẫn tệp tin (.pt)</label>
+                        <input type="text" id="m_path" placeholder="models/yolov8_ppe.pt" class="w-full bg-gray-950 border border-gray-800 rounded-lg p-2.5 text-gray-200 outline-none focus:border-purple-500" required>
+                    </div>
+                    <button type="submit" class="w-full bg-purple-600 hover:bg-purple-500 text-white font-semibold py-2.5 rounded-lg transition-all shadow-lg shadow-purple-900/30">
+                        Thêm vào Cloud DB
+                    </button>
+                </form>
+            </div>
+
+            <div class="bg-gray-900 p-5 rounded-2xl border border-gray-800 shadow-lg">
+                <div class="flex items-center space-x-2 mb-4 border-b border-gray-800 pb-2">
+                    <span class="text-lg">📹</span>
+                    <h2 class="text-base font-semibold text-blue-400">Đăng ký Camera mới</h2>
+                </div>
+                <form id="form-camera" onsubmit="addCamera(event)" class="space-y-3 text-sm">
+                    <div class="grid grid-cols-2 gap-3">
+                        <div>
+                            <label class="block text-xs text-gray-500 mb-1">Mã định danh (ID)</label>
+                            <input type="text" id="c_id" placeholder="cam_01" class="w-full bg-gray-950 border border-gray-800 rounded-lg p-2.5 text-gray-200 outline-none focus:border-blue-500" required>
+                        </div>
+                        <div>
+                            <label class="block text-xs text-gray-500 mb-1">Tên hiển thị</label>
+                            <input type="text" id="c_name" placeholder="Camera Cổng" class="w-full bg-gray-950 border border-gray-800 rounded-lg p-2.5 text-gray-200 outline-none focus:border-blue-500" required>
+                        </div>
+                    </div>
+                    <div>
+                        <label class="block text-xs text-gray-500 mb-1">Nguồn luồng (Source/RTSP)</label>
+                        <input type="text" id="c_source" placeholder="0 (Webcam) hoặc link rtsp://..." class="w-full bg-gray-950 border border-gray-800 rounded-lg p-2.5 text-gray-200 outline-none focus:border-blue-500" required>
+                    </div>
+                    <div>
+                        <label class="block text-xs text-gray-500 mb-1">Khu vực lắp đặt</label>
+                        <input type="text" id="c_location" placeholder="Nhà xưởng số 2" class="w-full bg-gray-950 border border-gray-800 rounded-lg p-2.5 text-gray-200 outline-none focus:border-blue-500">
+                    </div>
+                    <div>
+                        <label class="block text-xs text-gray-500 mb-1">Chỉ định Mô hình AI xử lý</label>
+                        <select id="c_model_id" class="w-full bg-gray-950 border border-gray-800 rounded-lg p-2.5 text-gray-300 outline-none focus:border-blue-500" required>
+                            <option value="">-- Tải danh sách Model --</option>
+                        </select>
+                    </div>
+                    <button type="submit" class="w-full bg-blue-600 hover:bg-blue-500 text-white font-semibold py-2.5 rounded-lg transition-all shadow-lg shadow-blue-900/30">
+                        Thêm thiết bị
+                    </button>
+                </form>
+            </div>
+        </div>
+
+        <div class="xl:col-span-2 space-y-6">
+            
+            <div class="bg-gray-900 p-5 rounded-2xl border border-gray-800 shadow-lg">
+                <div class="flex justify-between items-center mb-4 border-b border-gray-800 pb-2">
+                    <div class="flex items-center space-x-2">
+                        <span class="text-lg">📋</span>
+                        <h2 class="text-base font-semibold text-yellow-500">Trạm điều phối Camera hành trình</h2>
+                    </div>
+                    <button onclick="loadCameras()" class="text-xs bg-gray-800 hover:bg-gray-700 border border-gray-700 px-3 py-1.5 rounded-lg font-medium transition-all">
+                        🔄 Làm mới danh sách
+                    </button>
+                </div>
+                <div class="overflow-x-auto">
+                    <table class="w-full text-left text-sm text-gray-400">
+                        <thead class="text-xs text-gray-400 uppercase bg-gray-950">
+                            <tr>
+                                <th class="px-4 py-3 rounded-l-lg">Mã Camera</th>
+                                <th class="px-4 py-3">Thông tin thiết bị</th>
+                                <th class="px-4 py-3 text-center rounded-r-lg">Tác vụ điều khiển hệ thống biên</th>
+                            </tr>
+                        </thead>
+                        <tbody id="camera-list" class="divide-y divide-gray-800">
+                            </tbody>
+                    </table>
+                </div>
+            </div>
+
+            <div class="bg-gray-900 p-5 rounded-2xl border border-gray-800 shadow-lg">
+                <div class="flex items-center space-x-2 mb-4 border-b border-gray-800 pb-2">
+                    <span class="text-lg">📺</span>
+                    <h2 class="text-base font-semibold text-green-400">Live Video Wall (Mạng lưới biên P2P)</h2>
+                </div>
+                <div id="video-wall" class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div id="video-placeholder" class="text-gray-600 italic col-span-full py-8 text-center text-sm">
+                        Chưa có luồng WebRTC nào được kết nối trực tiếp từ Edge Node.
+                    </div>
+                </div>
+            </div>
+
+        </div>
+    </main>
+
+    <script>
+        const DEFAULT_EDGE = "edge_node_1";
+
+        document.addEventListener('DOMContentLoaded', () => {
+            loadModels();
+            loadCameras();
+        });
+
+        // =====================================================================
+        // TÁC VỤ CRUD DATABASE CLOUD
+        // =====================================================================
+        async function loadModels() {
+            try {
+                const res = await fetch('/api/cloud/list_models');
+                const data = await res.json();
+                const models = data.models || data; 
+                const selectEl = document.getElementById('c_model_id');
+                selectEl.innerHTML = '<option value="">-- Chọn AI Model --</option>';
+                models.forEach(m => {
+                    selectEl.innerHTML += `<option value="${m.id}">${m.name} (${m.version})</option>`;
+                });
+            } catch (err) { console.error("Lỗi đồng bộ danh sách Model từ Cloud:", err); }
+        }
+
+        async function addModel(e) {
+            e.preventDefault();
+            const payload = {
+                name: document.getElementById('m_name').value,
+                version: document.getElementById('m_version').value,
+                file_path: document.getElementById('m_path').value,
+                task_type: document.getElementById('m_task').value
+            };
+
+            try {
+                const res = await fetch('/api/cloud/add_model', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(payload)
+                });
+                if(res.ok) {
+                    alert("✅ Đã lưu cấu hình Model vào Postgres Cloud!");
+                    document.getElementById('form-model').reset();
+                    loadModels();
+                } else { alert("❌ Gặp lỗi khi thêm Model."); }
+            } catch (err) { console.error(err); }
+        }
+
+        async function loadCameras() {
+            try {
+                const res = await fetch('/api/cloud/list_cameras');
+                const data = await res.json();
+                const cameras = data.cameras || data;
+                const tbody = document.getElementById('camera-list');
+                tbody.innerHTML = '';
+
+                if (!cameras || cameras.length === 0) {
+                    tbody.innerHTML = '<tr><td colspan="3" class="text-center py-6 text-gray-600 italic">Chưa đăng ký thiết bị biên nào.</td></tr>';
+                    return;
+                }
+
+                cameras.forEach(c => {
+                    tbody.innerHTML += `
+                        <tr class="hover:bg-gray-850/50 transition-colors">
+                            <td class="px-4 py-4 font-mono font-bold text-gray-200 text-sm">${c.camera_id}</td>
+                            <td class="px-4 py-4 text-xs">
+                                <span class="text-sm font-semibold text-gray-300">${c.name}</span> <br>
+                                <span class="text-gray-500">📍 Vị trí:</span> ${c.location || 'Chưa rõ'} | 
+                                <span class="text-gray-500">🔌 Nguồn:</span> <span class="font-mono">${c.source}</span>
+                            </td>
+                            <td class="px-4 py-4 text-center space-y-1.5 md:space-y-0 md:space-x-2">
+                                <button onclick="startEdgeCamera('${c.camera_id}')" class="bg-emerald-600 hover:bg-emerald-500 text-white font-medium px-2.5 py-1.5 rounded-md text-xs transition-all shadow-md shadow-emerald-950/40">1. Bật AI</button>
+                                <button onclick="openLiveView('${c.camera_id}')" class="bg-indigo-600 hover:bg-indigo-500 text-white font-medium px-2.5 py-1.5 rounded-md text-xs transition-all shadow-md shadow-indigo-950/40">2. Xem Live</button>
+                                <button onclick="stopEdgeCamera('${c.camera_id}')" class="bg-gray-800 hover:bg-gray-700 text-gray-300 border border-gray-700 px-2.5 py-1.5 rounded-md text-xs transition-all">Tắt AI</button>
+                                <button onclick="removeCamera('${c.camera_id}')" class="text-red-500 hover:text-red-400 p-1.5 text-xs font-semibold">Xóa</button>
+                            </td>
+                        </tr>
+                    `;
+                });
+            } catch (err) { console.error("Lỗi kết nối API Cloud:", err); }
+        }
+
+        async function addCamera(e) {
+            e.preventDefault();
+            const payload = {
+                cam_id: document.getElementById('c_id').value,
+                name: document.getElementById('c_name').value,
+                source: document.getElementById('c_source').value,
+                location: document.getElementById('c_location').value,
+                current_model_id: parseInt(document.getElementById('c_model_id').value)
+            };
+
+            try {
+                const res = await fetch('/api/cloud/add_camera', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(payload)
+                });
+                if(res.ok) {
+                    alert("✅ Đăng ký thiết bị Camera thành công!");
+                    document.getElementById('form-camera').reset();
+                    loadCameras();
+                } else {
+                    const errData = await res.json();
+                    alert(`❌ Thất bại: ${errData.detail || 'Lỗi không xác định'}`);
+                }
+            } catch (err) { console.error(err); }
+        }
+
+        async function removeCamera(camera_id) {
+            if(!confirm(`Xóa cấu hình thiết bị ${camera_id} khỏi Database Cloud?`)) return;
+            try {
+                const res = await fetch(`/api/cloud/remove_camera/${camera_id}`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ edge_id: DEFAULT_EDGE })
+                });
+                if(res.ok) { loadCameras(); }
+            } catch (err) { console.error(err); }
+        }
+
+        // =====================================================================
+        // ĐIỀU KHIỂN THIẾT BỊ BIÊN (EDGE COMMAND INTERACTION)
+        // =====================================================================
+        async function startEdgeCamera(camera_id) {
+            try {
+                const res = await fetch(`/api/cloud/start_camera/${camera_id}`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ edge_id: DEFAULT_EDGE })
+                });
+                
+                if (!res.ok) {
+                    const errText = await res.text();
+                    alert(`🚨 Lỗi từ Cloud (${res.status}): ${errText}`);
+                    return; 
+                }
+
+                // Dùng tuyệt chiêu đọc thô (text) trước khi parse JSON để không bao giờ bị Crash
+                const rawText = await res.text(); 
+                if (!rawText || rawText === "null") {
+                    alert("📡 Đầu não thông báo: Kích hoạt AI Biên thành công!");
+                    return;
+                }
+
+                const data = JSON.parse(rawText);
+                alert(`📡 Đầu não thông báo: ${data.message || 'Thành công'}`);
+            } catch (err) { 
+                alert(`🚨 Bị lỗi ở trình duyệt: ${err.message}`); 
+                console.error(err);
+            }
+        }
+
+        async function stopEdgeCamera(camera_id) {
+            try {
+                const res = await fetch(`/api/cloud/stop_camera/${camera_id}`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ edge_id: DEFAULT_EDGE })
+                });
+                
+                if (!res.ok) {
+                    let errText = await res.text();
+                    try { 
+                        let errJson = JSON.parse(errText); 
+                        errText = errJson.detail || errText; 
+                    } catch(e) {}
+                    alert(`🚨 Lỗi từ Cloud (${res.status}): ${errText}`);
+                    return;
+                }
+
+                const data = await res.json();
+                alert(`🛑 Đã tắt luồng quét AI biên: ${data.message}`);
+                
+                const oldBox = document.getElementById(`vid-box-${camera_id}`);
+                if (oldBox) oldBox.remove();
+            } catch (err) { 
+                alert(`🚨 Sập mạng/Trình duyệt: ${err.message}`); 
+            }
+        }
+
+        // =====================================================================
+        // KHỞI TẠO LUỒNG WEBRTC PHI TẬP TRUNG (DECENTRALIZED P2P STREAM)
+        // =====================================================================
+        async function openLiveView(camera_id) {
+            const wall = document.getElementById('video-wall');
+            const placeholder = document.getElementById('video-placeholder');
+            if (placeholder) placeholder.remove();
+
+            // Nếu box video cho cam này chưa tồn tại trên tường, tiến hành dựng HTML
+            if (!document.getElementById(`vid-box-${camera_id}`)) {
+                const boxHtml = `
+                    <div id="vid-box-${camera_id}" class="bg-black rounded-xl border border-gray-800 overflow-hidden relative shadow-2xl group">
+                        <div class="absolute top-3 left-3 bg-gray-900/80 backdrop-blur-sm px-2.5 py-1 rounded-md flex items-center z-10 border border-gray-800 text-xs">
+                            <span class="w-2 h-2 rounded-full bg-red-500 mr-2 live-indicator"></span> 
+                            <span class="font-mono font-bold tracking-wider text-gray-200">${camera_id}</span>
+                        </div>
+                        <video id="video-${camera_id}" class="w-full h-56 object-cover" autoplay playsinline muted></video>
+                    </div>
+                `;
+                wall.insertAdjacentHTML('beforeend', boxHtml);
+            }
+
+            // Gọi tiến trình bắt tay WebRTC
+            initiateWebRTCHandshake(camera_id, `video-${camera_id}`);
+        }
+
+        async function initiateWebRTCHandshake(camera_id, videoElementId) {
+            const videoElement = document.getElementById(videoElementId);
+            const pc = new RTCPeerConnection();
+
+            // Nhận diện track video từ Thiết bị biên đẩy về
+            pc.addEventListener('track', (evt) => {
+                if (evt.track.kind === 'video') {
+                    videoElement.srcObject = evt.streams[0];
+                    console.log(`[WEBRTC] Đã đồng bộ luồng P2P của camera: ${camera_id}`);
+                }
+            });
+
+            pc.addTransceiver('video', { direction: 'recvonly' });
+
+            try {
+                // 1. Xin Cloud địa chỉ API WebRTC của Thiết bị biên (FastAPI Edge)
+                const infoRes = await fetch(`/api/cloud/get_stream_info/${camera_id}`);
+                if (!infoRes.ok) throw new Error("Không lấy được thông tin định tuyến từ Cloud Server.");
+                const info = await infoRes.json();
+
+                // 2. Trình duyệt khởi tạo Lời chào (Offer)
+                const offer = await pc.createOffer();
+                await pc.setLocalDescription(offer);
+
+                // 3. Bắn thẳng Lời chào WebRTC sang địa chỉ IP của Edge Node
+                console.log(`[WEBRTC] Đang bắt tay trực tiếp tới Edge Node qua URL: ${info.webrtc_offer_url}`);
+                const response = await fetch(info.webrtc_offer_url, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        sdp: pc.localDescription.sdp,
+                        type: pc.localDescription.type
+                    })
+                });
+
+                if (!response.ok) {
+                    throw new Error("Edge Node từ chối kết nối WebRTC. Có thể chưa bấm 'Bật AI'.");
+                }
+
+                // 4. Nhận lời đáp từ thiết bị biên và giải mã
+                const answer = await response.json();
+                await pc.setRemoteDescription(answer);
+
+            } catch (error) {
+                console.error(error);
+                alert(`❌ Lỗi WebRTC (${camera_id}): ${error.message}`);
+                const box = document.getElementById(`vid-box-${camera_id}`);
+                if (box) box.remove();
+            }
+        }
+    </script>
+</body>
+</html>
