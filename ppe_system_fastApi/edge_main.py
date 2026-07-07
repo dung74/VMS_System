@@ -1,3 +1,4 @@
+import asyncio
 import os
 
 from fastapi import BackgroundTasks, FastAPI, Request, HTTPException
@@ -10,8 +11,8 @@ from pydantic import BaseModel
 
 from core.Camera_thread import Camera_thread
 from core.frame_buffer import FrameBuffer
-
-# from database.database import init_db, AsyncSessionLocal, Camera, Event, AIModel
+from core.mqtt_sync import mqtt_config_listener, periodic_sync_request
+from database.database import init_db, AsyncSessionLocal, Camera, Event, AIModel
 
 import uuid
 from sqlalchemy import text
@@ -30,7 +31,6 @@ class ModelSyncRequest(BaseModel):
 
 class CameraStartRequest(BaseModel):
     source: str
-    model_filename: str
 
 
 
@@ -44,8 +44,12 @@ async def lifespan(app: FastAPI):
     global relay, cameras
     relay = MediaRelay()
 
-    # await init_db()
-    # print("[SYSTEM] Edge db Initialized")
+    await init_db()
+    print("[SYSTEM] Edge db Initialized")
+
+    listener_task = asyncio.create_task(mqtt_config_listener())
+    request_task = asyncio.create_task(periodic_sync_request())
+
 
 
     print(f"==> [SYSTEM] Edge Node {EDGE_ID} is ONLINE")
@@ -53,6 +57,10 @@ async def lifespan(app: FastAPI):
     yield
 
     print(f"==> [SYSTEM] Shutting down Edge Node {EDGE_ID}....")
+
+
+    listener_task.cancel()
+    request_task.cancel()
 
     coros = [pc.close() for pc in peer_connections]
     for coro in coros:
@@ -101,13 +109,10 @@ async def sync_model(data: ModelSyncRequest, background_tasks: BackgroundTasks):
 
 @app.post("/api/edge/start_camera/{camera_id}")
 async def start_camera(camera_id: str, data: CameraStartRequest):
+    print("error")
     if camera_id in cameras:
         return  {"message": f"Camera {camera_id} is already running"}
     
-    clean_model_filename = os.path.basename(data.model_filename)
-    model_path = os.path.join(MODEL_DIR, clean_model_filename)
-    if not os.path.exists(model_path):
-        raise HTTPException(status_code=404, detail=f"Model {clean_model_filename} not found on edge node")
     
     source = int(data.source) if data.source.isdigit() else data.source
     input_buffer = FrameBuffer(max_size=1)
@@ -116,13 +121,12 @@ async def start_camera(camera_id: str, data: CameraStartRequest):
     new_camera_thread = Camera_thread(
         camera_id = camera_id,
         source = source,
-        model_path = model_path,
         input_buffer = input_buffer,
         output_buffer = output_buffer
     )
     cameras[camera_id] = new_camera_thread
 
-    return {"message": f"Camera {camera_id} started successfully with model{clean_model_filename}"}
+    return {"message": f"Camera {camera_id} started successfully "}
 
 @app.post("/api/edge/stop_camera/{camera_id}")
 async def stop_camera(camera_id: str):

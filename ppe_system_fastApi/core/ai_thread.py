@@ -1,61 +1,61 @@
+import asyncio
+import time
+
+from requests import session
 from ultralytics import YOLO
 import cv2
-
-COLOR_PERSON = (0, 255, 0)
-COLOR_CARD = (0, 0, 255)
+from database.database import AsyncSessionLocal, Camera, AIModel, Event
+import json
+from core.model_factory import ModelFactory
 
 class ModelPredictor:
-    def __init__(self, model):
-        self.model = model
-        self.CLASS_PERSON = 2
-        self.CLASS_CARD = 3
+    def __init__(self, camera_id):
+        self.camera_id = camera_id
 
 
 
-    
-    def draw_bounding_boxes(self, frame, results):
-        detections = []
-        for r in results:
-            for box in r.boxes:
-
-                cls_id = int(box.cls[0])
-                conf = float(box.conf[0])
-                x1, y1, x2, y2 = box.xyxy[0].cpu().numpy().astype(int)
-                if cls_id == self.CLASS_PERSON:
-                    
-                    cv2.rectangle(frame, (int(x1), int(y1)), (int(x2), int(y2)), COLOR_PERSON, 2)
-                    cv2.putText(frame, f'Person {conf:.2f}', (int(x1), int(y1) - 10), cv2.FONT_HERSHEY_SIMPLEX, 0.5, COLOR_PERSON, 2)
-                elif cls_id == self.CLASS_CARD:
-                    cv2.rectangle(frame, (int(x1), int(y1)), (int(x2), int(y2)), COLOR_CARD, 2)
-                    cv2.putText(frame, f'Card {conf:.2f}', (int(x1), int(y1) - 10), cv2.FONT_HERSHEY_SIMPLEX, 0.5, COLOR_CARD, 2)
-        
-                detections.append({
-                    "class_id": cls_id,
-                    "confidence": conf,
-                    "bbox": [int(x1), int(y1), int(x2), int(y2)]
-                })
-        return frame, detections
-    
-
-    def predict_frame(self, frame_reader):
+    def predict_frame(self, frame_reader, dict_model_instances):
 
         frame = frame_reader
-        
 
         if frame is None:
-            return None
-        results = self.model.predict(
-            frame,
-            conf=0.5,
-            iou=0.5,
-            classes = [self.CLASS_PERSON, self.CLASS_CARD],
-            verbose=False,
-            device='cpu'
-        )
-
-        result_frame, detections = self.draw_bounding_boxes(frame, results)
+            return [], []
         
+        all_detections = []
+        all_payload = []
+        topic = f"ppe/events/{self.camera_id}"
+        self.dict_models_instance_of_camera = dict_model_instances
 
-        return result_frame, detections
+        
+        for model_id, model in self.dict_models_instance_of_camera.items():
+            detections = model.predict_frame(frame)
+            if not detections:
+                continue
+            all_detections.append(detections)
+            for detection in detections:
+                class_name = detection["class_name"]
+                confidence = detection["confidence"]
+                bbox = detection["bbox"]
+                x1, y1, x2, y2 = bbox
+                cv2.rectangle(frame, (int(x1), int(y1)), (int(x2), int(y2)), (0, 255, 0), 2)
+                cv2.putText(frame, f"{class_name} : {confidence:.2f}", (int(x1), int(y1) - 10), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 255, 0), 2)
+        
+          
+
+            # send mqtt message with detections
+            payload = {
+                        "edge_id": 'edge_001',
+                        "camera_id":self.camera_id,
+                        # take the model id 
+                        "model_id": model_id,
+                        "detections": detections,
+                        "timestamp": time.time()
+                    }
+            all_payload.append(payload)
+
+            
+                                        
+
+        return all_detections, all_payload
 
 

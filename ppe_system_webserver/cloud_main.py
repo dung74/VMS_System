@@ -12,6 +12,8 @@ import aiomqtt
 from database.database import AsyncSessionLocal, init_db, Camera, AIModel, Event
 from sqlalchemy import select
 
+from core.server_MQTT_sync import mqtt_config_handler
+
 MQTT_BROKER = "localhost"
 MQTT_PORT = 1883
 
@@ -57,11 +59,19 @@ async def lifespan(app: FastAPI):
     await init_db()
     print("[SYSTEM] Cloud DB Initialized.")
 
+    asyncio.create_task(mqtt_config_handler())
+
+
+    print("==> [SYSTEM] Cloud server is ONLINE")
+
     mqtt_task = asyncio.create_task(mqtt_listener_loop())
+    print("==> [SYSTEM] MQTT listener started, waiting for events...")
+
     yield
 
     mqtt_task.cancel()
     print("==> [SYSTEM] Cloud server shutting down...")
+
 
 app = FastAPI(lifespan=lifespan)
 app.add_middleware(CORSMiddleware, allow_origins=["*"], allow_methods=["*"], allow_headers=["*"])
@@ -72,9 +82,10 @@ class ActionRequest(BaseModel):
 
 class ModelCreate(BaseModel):
     name: str
-    version: str
+    type: str
     file_path: str
     task_type: str = "detection"
+    parameters: dict = {}
 class CameraCreate(BaseModel):
     camera_id: str
     name: str
@@ -100,13 +111,11 @@ async def cloud_start_camera(camera_id: str, payload: ActionRequest):
         if not camera:
             raise HTTPException(status_code=404, detail=f"Camera {camera_id} not found in database")
         
-        model_query = await session.execute(select(AIModel).where(AIModel.id == camera.current_model_id))
-        model = model_query.scalars().first()
+        
         edge_payload = {
             "source": camera.source,
-            "model_filename": model.file_path
         }
-        print(f"Sending request to edge node {payload.edge_id} to start camera {camera_id} with model {model.name}, path {model.file_path}")
+        print(f"Sending request to edge node {payload.edge_id} to start camera {camera_id} with source {camera.source}")
 
         try:
             async with httpx.AsyncClient() as client:
@@ -163,9 +172,10 @@ async def add_model(payload: ModelCreate):
     async with AsyncSessionLocal() as session:
         new_model = AIModel(
             name=payload.name,
-            version=payload.version,
+            type=payload.type,
             file_path=payload.file_path,
             task_type=payload.task_type,
+            parameters={},
             is_active=True
         )
         session.add(new_model)

@@ -47,8 +47,8 @@
                     </div>
                     <div class="grid grid-cols-2 gap-3">
                         <div>
-                            <label class="block text-xs text-gray-500 mb-1">Phiên bản</label>
-                            <input type="text" id="m_version" placeholder="v1.0.0" class="w-full bg-gray-950 border border-gray-800 rounded-lg p-2.5 text-gray-200 outline-none focus:border-purple-500" required>
+                            <label class="block text-xs text-gray-500 mb-1">Type</label>
+                            <input type="text" id="m_type" placeholder="detection" class="w-full bg-gray-950 border border-gray-800 rounded-lg p-2.5 text-gray-200 outline-none focus:border-purple-500" required>
                         </div>
                         <div>
                             <label class="block text-xs text-gray-500 mb-1">Loại tác vụ</label>
@@ -163,7 +163,7 @@
                 const selectEl = document.getElementById('c_model_id');
                 selectEl.innerHTML = '<option value="">-- Chọn AI Model --</option>';
                 models.forEach(m => {
-                    selectEl.innerHTML += `<option value="${m.id}">${m.name} (${m.version})</option>`;
+                    selectEl.innerHTML += `<option value="${m.id}">${m.name} (${m.type})</option>`;
                 });
             } catch (err) { console.error("Lỗi đồng bộ danh sách Model từ Cloud:", err); }
         }
@@ -172,9 +172,10 @@
             e.preventDefault();
             const payload = {
                 name: document.getElementById('m_name').value,
-                version: document.getElementById('m_version').value,
+                type: document.getElementById('m_type').value,
                 file_path: document.getElementById('m_path').value,
-                task_type: document.getElementById('m_task').value
+                task_type: document.getElementById('m_task').value,
+                parameters: {}
             };
 
             try {
