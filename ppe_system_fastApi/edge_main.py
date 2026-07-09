@@ -108,7 +108,7 @@ async def sync_model(data: ModelSyncRequest, background_tasks: BackgroundTasks):
     return {"message": "Model synchronization started", "filename": filename}
 
 @app.post("/api/edge/start_camera/{camera_id}")
-async def start_camera(camera_id: str, data: CameraStartRequest):
+async def start_camera(camera_id: int, data: CameraStartRequest):
     print("error")
     if camera_id in cameras:
         return  {"message": f"Camera {camera_id} is already running"}
@@ -129,7 +129,7 @@ async def start_camera(camera_id: str, data: CameraStartRequest):
     return {"message": f"Camera {camera_id} started successfully "}
 
 @app.post("/api/edge/stop_camera/{camera_id}")
-async def stop_camera(camera_id: str):
+async def stop_camera(camera_id: int):
     if camera_id in cameras:
         cameras[camera_id].stop()
         del cameras[camera_id]
@@ -138,7 +138,7 @@ async def stop_camera(camera_id: str):
         raise HTTPException(status_code=404, detail=f"Camera {camera_id} not found")
 
 @app.post("/offer/{camera_id}")
-async def offer(camera_id: str, request: Request):
+async def offer(camera_id: int, request: Request):
     if camera_id not in cameras:
         raise HTTPException(status_code=404, detail=f"Camera {camera_id} not found")
     

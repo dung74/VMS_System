@@ -19,6 +19,15 @@ from core.model_factory import ModelFactory
 MQTT_BROKER_URL = "localhost"
 MQTT_PORT = 1883
 
+            # payload = {
+            #             "edge_id": 'edge_001',
+            #             "camera_id":self.camera_id,
+            #             # take the model id 
+            #             "model_id": model_id,
+            #             "detections": detections,
+            #             "timestamp": time.time()
+            #         }
+
 
 class Camera_thread(VideoStreamTrack):
     def __init__(self,camera_id, source, input_buffer=None, output_buffer=None):
@@ -37,6 +46,8 @@ class Camera_thread(VideoStreamTrack):
         self.ai_predictor = ModelPredictor(camera_id=self.camera_id)
         # self.readyState = "live"
         self.is_running = True
+        self.last_saved_tracks = {} 
+        self.gap_time = 2
 
 
 
@@ -46,7 +57,7 @@ class Camera_thread(VideoStreamTrack):
         list_models_info = []
         #select * from all_info model where model_id == all camera current_model_id
         async with AsyncSessionLocal() as session:
-            camera = await session.scalar(select(Camera).where(Camera.camera_id == camera_id))
+            camera = await session.scalar(select(Camera).where(Camera.id == camera_id))
             if camera:
                 model_ids = camera.current_model_id
                 if not isinstance(model_ids, list):
@@ -70,17 +81,47 @@ class Camera_thread(VideoStreamTrack):
     def draw_detections_on_frame(self, frame, all_detections):
         for detections in all_detections:
             for det in detections:
-                class_name = det["class_name"]
-                confidence = det["confidence"]
-                bbox = det["bbox"]
+                track_id = det.get("track_id", "Unknown")
+                class_name = det.get("class_name", "Unknown")
+                confidence = det.get("confidence", 0.0)
+                bbox = det.get("bbox", (0, 0, 0, 0))
                 x1, y1, x2, y2 = bbox
                 cv2.rectangle(frame, (x1, y1), (x2, y2), (0, 255, 0), 2)
-                cv2.putText(frame, f"{class_name} : {confidence:.2f}", (x1, y1 - 10), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 255, 0), 2)
+                cv2.putText(frame, f"{class_name} : {confidence:.2f} (ID: {track_id})", (x1, y1 - 10), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 255, 0), 2)
         return frame
+    def check_if_event_should_be_saved(self, payload):
+
+        time_event = payload.get("timestamp", time.time())
+        detections = payload.get("detections", [])
+        if not detections:
+            return False
+        
+        should_save = False
+
+        self.last_saved_tracks = {
+            tr_id: ts for tr_id, ts in self.last_saved_tracks.items()
+            if (time_event - ts) < (self.gap_time * 2) 
+        }
+
+        for det in detections:
+            track_id = det.get("track_id")
+            if track_id is None:
+                continue
+            last_time = self.last_saved_tracks.get(track_id, 0)
+            if  (time_event - last_time) >= self.gap_time:
+                should_save = True
+                self.last_saved_tracks[track_id] = time_event
+        
+        return should_save
+    
+
+    
+
 
     async def save_event_to_db(self, payload):
-
+    
         event_type = payload.get("event_type", "object_detected")
+ 
         try:
             async with AsyncSessionLocal() as session:
                 new_event = Event(
@@ -131,9 +172,11 @@ class Camera_thread(VideoStreamTrack):
                                 if len(all_detections) > 0:
 
                                     for payload in all_payload:
-                                        asyncio.create_task(self.save_event_to_db(payload))
+                                        if self.check_if_event_should_be_saved(payload):
 
-                                        await client.publish(topic, payload=json.dumps(payload))
+                                            asyncio.create_task(self.save_event_to_db(payload))
+
+                                            await client.publish(topic, payload=json.dumps(payload))
                                     # print(f"Published event {event_type_str}")
                     except Exception as e:
                         print(f"Error in AI worker loop: {e}")

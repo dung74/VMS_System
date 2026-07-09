@@ -23,7 +23,7 @@ async def get_latest_config_from_db(edge_id: str) -> dict:
         for cam in cameras_db:
             cam_list.append({
                 "id": cam.id,
-                "camera_id": cam.camera_id,
+                # "camera_id": cam.camera_id,
                 "name": cam.name,
                 "source": cam.source,
                 "location": cam.location,
@@ -62,7 +62,6 @@ async def mqtt_config_handler():
                     try:
                         payload_str = message.payload.decode()
                         request_data = json.loads(payload_str)
-                        print(f"Received sync request: {request_data}")
                         if request_data.get("action") == "request_full_sync":
                             edge_id = request_data.get("edge_id")
                             print(f"Received full sync request from edge_id: {edge_id}")
@@ -70,7 +69,7 @@ async def mqtt_config_handler():
                                 latest_config = await get_latest_config_from_db(edge_id)
                                 response_topic = f"server/config/{edge_id}"
                                 await client.publish(response_topic, payload=json.dumps(latest_config))
-                                print(f"Published latest config to topic: {response_topic}")
+                                # print(f"Published latest config to topic: {response_topic}")
                             else:
                                 print("Edge ID not provided in the request.")
                         else:

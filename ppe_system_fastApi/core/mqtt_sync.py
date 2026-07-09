@@ -2,7 +2,8 @@ import asyncio
 import json
 import aiomqtt
 from sqlalchemy.future import select
-from sqlalchemy.dialects.postgresql import insert
+from sqlalchemy import delete
+
 
 from database.database import AsyncSessionLocal, Camera, Event, AIModel
 
@@ -20,8 +21,14 @@ async def process_sync_data(payload: dict):
         async with AsyncSessionLocal() as session:
             if sync_type == "sync_camera" or sync_type == "full_sync":
                 cameras_data = payload.get("cameras", [])
+
+                incoming_camera_ids = []
                 for cam_data in cameras_data:
                     Cam_id = cam_data.get("id")
+                    if not Cam_id:
+                        print("Camera ID is missing in the payload. Skipping this camera.")
+                        continue
+                    incoming_camera_ids.append(Cam_id)
                     existing_camera = await session.execute(select(Camera).where(Camera.id == Cam_id))
                     existing_camera = existing_camera.scalars().first()
                     if existing_camera:
@@ -35,18 +42,31 @@ async def process_sync_data(payload: dict):
                         # Create new camera
                         new_camera = Camera(
                             id=cam_data.get("id"),
-                            camera_id=cam_data.get("camera_id"),
+                            # camera_id=cam_data.get("camera_id"),
                             name=cam_data.get("name"),
                             source=cam_data.get("source"),
                             location=cam_data.get("location"),
+                            current_model_id=cam_data.get("current_model_id", []),
                             status=cam_data.get("status", "active")
                         )
                         session.add(new_camera)
+                
+                if incoming_camera_ids:
+                    delete_stmt = delete(Camera).where(Camera.id.not_in(incoming_camera_ids))
+                    result = await session.execute(delete_stmt)
+                    if result.rowcount > 0:
+                        print(f"Deleted {result.rowcount} cameras that are not present in the sync data")
+                else:
+                    delete_stmt = delete(Camera)
+                    result = await session.execute(delete_stmt)
+                    print(f"Deleted all cameras as no camera data was provided in the sync data")
+
             if sync_type == "sync_model" or sync_type == "full_sync":
                 models_data = payload.get("models", [])
+                incoming_model_ids = []
                 for model_data in models_data:
                     model_id = model_data.get("id")
-                    print(f"value of model_id: {model_id}, type: {type(model_id)}")
+                    incoming_model_ids.append(model_id)
                     existing_model = await session.execute(select(AIModel).where(AIModel.id == model_id))
                     existing_model = existing_model.scalars().first()
                     if existing_model:
@@ -69,6 +89,15 @@ async def process_sync_data(payload: dict):
                             is_active=model_data.get("is_active", True)
                         )
                         session.add(new_model)
+                if incoming_model_ids:
+                    delete_stmt = delete(AIModel).where(AIModel.id.not_in(incoming_model_ids))
+                    result = await session.execute(delete_stmt)
+                    if result.rowcount > 0:
+                        print(f"Deleted {result.rowcount} models that are not present in the sync data")
+                else:
+                    delete_stmt = delete(AIModel)
+                    result = await session.execute(delete_stmt)
+                    print(f"Deleted all models as no model data was provided in the sync data")
             await session.commit()
             print(f"saved sync data to database successfully for sync_type: {sync_type}")
     except Exception as e:

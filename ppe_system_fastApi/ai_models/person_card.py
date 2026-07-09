@@ -52,11 +52,13 @@ class PersonCardPredictor(BaseModel):
 
         if frame is None:
             return None
-        results = self.model.predict(
+        results = self.model.track(
             frame,
             conf=0.5,
             iou=0.5,
             classes = [self.CLASS_PERSON, self.CLASS_CARD],
+            tracker="bytetrack.yaml",
+            persist=True,
             verbose=False,
             device='cpu'
         )
@@ -65,10 +67,15 @@ class PersonCardPredictor(BaseModel):
         detections = []
         for r in results:
             for box in r.boxes:
+                if box.id is not None:
+                    trk_id = int(box.id[0])
+                else:
+                    trk_id = None
                 cls_name = CLASS_MAP.get(int(box.cls[0]), "unknown")
                 conf = float(box.conf[0])
                 x1, y1, x2, y2 = box.xyxy[0].cpu().numpy().astype(int)
                 detections.append({
+                    "track_id": trk_id,
                     "class_name": cls_name,
                     "confidence": conf,
                     "bbox": [int(x1), int(y1), int(x2), int(y2)]

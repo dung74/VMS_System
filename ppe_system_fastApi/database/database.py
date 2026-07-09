@@ -35,7 +35,7 @@ class Camera(Base):
     __tablename__ = 'cameras'
     
     id = Column(Integer, primary_key=True, autoincrement=True)
-    camera_id = Column(String(50), unique=True, nullable=False)
+    # camera_id = Column(String(50), unique=True, nullable=False)
     name = Column(String(100), nullable=False)
     source = Column(String(255), nullable=False)
     location = Column(String(150))
@@ -51,7 +51,7 @@ class Event(Base):
     
     # Sử dụng UUID tự sinh cho khóa chính
     id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
-    camera_id = Column(String(50), ForeignKey('cameras.camera_id', ondelete='CASCADE'))
+    camera_id = Column(Integer, ForeignKey('cameras.id', ondelete='CASCADE'))
     model_id = Column(Integer, ForeignKey('ai_models.id', ondelete='SET NULL'))
     event_type = Column(String(50), nullable=False)
     image_path = Column(String(255))

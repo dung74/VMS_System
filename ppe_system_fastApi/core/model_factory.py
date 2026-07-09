@@ -18,7 +18,7 @@ class ModelFactory:
         },
         'cell_phone': {
             'confidence_threshold': 0.5,
-            'model_path': 'yolov8m.pt',
+            'model_path': 'models/yolov8n.pt',
         }
     }
 

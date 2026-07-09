@@ -28,8 +28,8 @@ async def mqtt_listener_loop():
             print("Connecting to MQTT broker...")
             async with aiomqtt.Client(hostname=MQTT_BROKER, port=MQTT_PORT) as client:
 
-                await client.subscribe("vms/events/#")
-                print("Subscribed to topic: vms/events, waiting for messages...")
+                await client.subscribe("ppe/events/#")
+                print("Subscribed to topic: ppe/events, waiting for messages...")
 
                 async for message in client.messages:
                     payload_str = message.payload.decode()
@@ -37,19 +37,24 @@ async def mqtt_listener_loop():
                     print(f"New event received {event_data['event_type']} from camera {event_data['camera_id']}")
 
                     async with AsyncSessionLocal() as session:
-                        cam_query = await session.execute(select(Camera).where(Camera.camera_id == event_data["camera_id"]))
+                        cam_query = await session.execute(select(Camera).where(Camera.id == event_data["camera_id"]))
                         cam_db = cam_query.scalars().first()
 
                         if cam_db:
                             new_event = Event(
-                                camera_id=cam_db.id,
-                                model_id=cam_db.current_model_id,
+                                camera_id=event_data["camera_id"],
+                                model_id=event_data["model_id"],
                                 event_type=event_data["event_type"],
-                                metadata_info={"confidence": event_data.get("confidence", 0)}
+                                image_path = None,
+                                video_path = None,
+                                status='pending',
+                                detections=event_data.get("detections"),
+                                # timestamp=event_data["timestamp"],
+                                metadata_info=event_data
                             )
                             session.add(new_event)
                             await session.commit()
-                            print(f"Saved event {new_event.event_type} for camera {cam_db.camera_id} in database")
+                            print(f"Saved event {new_event.event_type} for camera {cam_db.id} in database")
         except Exception as error:
             print(f"MQTT lost connection: {error}. Retrying in 5 seconds...")
             await asyncio.sleep(5)
@@ -87,11 +92,12 @@ class ModelCreate(BaseModel):
     task_type: str = "detection"
     parameters: dict = {}
 class CameraCreate(BaseModel):
-    camera_id: str
+    # camera_id: int
     name: str
     source: str
     location: str
-    current_model_id: int
+    # list of model ids that the camera can use
+    current_model_id: list = []
 
 
 @app.get("/", response_class=HTMLResponse)
@@ -100,13 +106,13 @@ async def dashboard(request: Request):
 
 
 @app.post("/api/cloud/start_camera/{camera_id}")
-async def cloud_start_camera(camera_id: str, payload: ActionRequest):
+async def cloud_start_camera(camera_id: int, payload: ActionRequest):
     edge_urls = EDGE_NODES.get(payload.edge_id)
     if not edge_urls:
         raise HTTPException(status_code=400, detail="Not found IP for edge node")
     
     async with AsyncSessionLocal() as session:
-        camera_query = await session.execute(select(Camera).where(Camera.camera_id == camera_id))
+        camera_query = await session.execute(select(Camera).where(Camera.id == camera_id))
         camera = camera_query.scalars().first()
         if not camera:
             raise HTTPException(status_code=404, detail=f"Camera {camera_id} not found in database")
@@ -126,7 +132,7 @@ async def cloud_start_camera(camera_id: str, payload: ActionRequest):
             raise HTTPException(status_code=503, detail=f"Failed to connect to edge node {payload.edge_id}: {e}")
 
 @app.get("/api/cloud/get_stream_info/{camera_id}")
-async def get_stream_info(camera_id: str):
+async def get_stream_info(camera_id: int):
     edge_id = "edge_node_1"
     edge_urls = EDGE_NODES.get(edge_id)
 
@@ -139,7 +145,7 @@ async def add_camera(payload: CameraCreate):
 
     async with AsyncSessionLocal() as session:
         new_camera = Camera(
-            camera_id=payload.camera_id,
+            # camera_id=payload.camera_id,
             name=payload.name,
             source=payload.source,
             location=payload.location,
@@ -151,13 +157,13 @@ async def add_camera(payload: CameraCreate):
     return {"message": f"Camera {new_camera.name} added successfully"}
 
 @app.post("/api/cloud/remove_camera/{camera_id}")
-async def remove_camera(camera_id: str, payload: ActionRequest):
+async def remove_camera(camera_id: int, payload: ActionRequest):
     edge_urls = EDGE_NODES.get(payload.edge_id)
     if not edge_urls:
         raise HTTPException(status_code=400, detail="Not found IP for edge node")
     
     async with AsyncSessionLocal() as session:
-        camera_query = await session.execute(select(Camera).where(Camera.camera_id == camera_id))
+        camera_query = await session.execute(select(Camera).where(Camera.id == camera_id))
         camera = camera_query.scalars().first()
         if not camera:
             raise HTTPException(status_code=404, detail=f"Camera {camera_id} not found in database")
@@ -209,7 +215,7 @@ async def list_models():
     return {"models": models}
 
 @app.post("/api/cloud/stop_camera/{camera_id}")
-async def cloud_stop_camera(camera_id: str, payload: ActionRequest):
+async def cloud_stop_camera(camera_id: int, payload: ActionRequest):
     edge_urls = EDGE_NODES.get(payload.edge_id)
     if not edge_urls:
         raise HTTPException(status_code=400, detail="Not found IP for edge node")

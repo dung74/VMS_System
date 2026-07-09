@@ -23,7 +23,6 @@ class ModelPredictor:
         
         all_detections = []
         all_payload = []
-        topic = f"ppe/events/{self.camera_id}"
         self.dict_models_instance_of_camera = dict_model_instances
 
         
@@ -32,13 +31,14 @@ class ModelPredictor:
             if not detections:
                 continue
             all_detections.append(detections)
-            for detection in detections:
-                class_name = detection["class_name"]
-                confidence = detection["confidence"]
-                bbox = detection["bbox"]
-                x1, y1, x2, y2 = bbox
-                cv2.rectangle(frame, (int(x1), int(y1)), (int(x2), int(y2)), (0, 255, 0), 2)
-                cv2.putText(frame, f"{class_name} : {confidence:.2f}", (int(x1), int(y1) - 10), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 255, 0), 2)
+            # for detection in detections:
+            #     track_id = detection["track_id"]
+            #     class_name = detection["class_name"]
+            #     confidence = detection["confidence"]
+            #     bbox = detection["bbox"]
+            #     x1, y1, x2, y2 = bbox
+            #     cv2.rectangle(frame, (int(x1), int(y1)), (int(x2), int(y2)), (0, 255, 0), 2)
+            #     cv2.putText(frame, f"{class_name} : {confidence:.2f} (ID: {track_id})", (int(x1), int(y1) - 10), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 255, 0), 2)
         
           
 
@@ -48,6 +48,7 @@ class ModelPredictor:
                         "camera_id":self.camera_id,
                         # take the model id 
                         "model_id": model_id,
+                        "event_type": "object_detected",
                         "detections": detections,
                         "timestamp": time.time()
                     }
