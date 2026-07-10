@@ -13,6 +13,7 @@ from database.database import AsyncSessionLocal, init_db, Camera, AIModel, Event
 from sqlalchemy import select
 
 from core.server_MQTT_sync import mqtt_config_handler
+from typing import List, Optional
 
 MQTT_BROKER = "localhost"
 MQTT_PORT = 1883
@@ -21,6 +22,18 @@ EDGE_NODES={
     "edge_node_1": "http://127.0.0.1:8001"
 
 }
+class CameraEditRequest(BaseModel):
+    name: Optional[str] = None
+    source: Optional[str] = None
+    location: Optional[str] = None
+    current_model_id: Optional[List[int]] = None 
+class ModelEditRequest(BaseModel):
+    name: Optional[str] = None
+    type: Optional[str] = None
+    file_path: Optional[str] = None
+    task_type: Optional[str] = None
+    parameters: Optional[dict] = None
+
 
 async def mqtt_listener_loop():
     while True:
@@ -85,24 +98,20 @@ templates = Jinja2Templates(directory="templates")
 class ActionRequest(BaseModel):
     edge_id: str
 
-class ModelCreate(BaseModel):
-    name: str
-    type: str
-    file_path: str
-    task_type: str = "detection"
-    parameters: dict = {}
-class CameraCreate(BaseModel):
-    # camera_id: int
-    name: str
-    source: str
-    location: str
-    # list of model ids that the camera can use
-    current_model_id: list = []
+
 
 
 @app.get("/", response_class=HTMLResponse)
 async def dashboard(request: Request):
-    return templates.TemplateResponse(request=request, name="index.html")
+    return templates.TemplateResponse(request=request, name="cameras.html", context={"active_page": "cameras"})
+
+@app.get("/models", response_class=HTMLResponse)
+async def view_models(request: Request):
+    return templates.TemplateResponse(request=request, name="models.html", context={"active_page": "models"})
+
+@app.get("/events", response_class=HTMLResponse)
+async def view_events(request: Request):
+    return templates.TemplateResponse(request=request, name="events.html", context={"active_page": "events"})
 
 
 @app.post("/api/cloud/start_camera/{camera_id}")
@@ -141,7 +150,7 @@ async def get_stream_info(camera_id: int):
         "webrtc_offer_url": f"{edge_urls}/offer/{camera_id}"
     }
 @app.post("/api/cloud/add_camera")
-async def add_camera(payload: CameraCreate):
+async def add_camera(payload: CameraEditRequest):
 
     async with AsyncSessionLocal() as session:
         new_camera = Camera(
@@ -174,7 +183,7 @@ async def remove_camera(camera_id: int, payload: ActionRequest):
 
 
 @app.post("/api/cloud/add_model")
-async def add_model(payload: ModelCreate):
+async def add_model(payload: ModelEditRequest):
     async with AsyncSessionLocal() as session:
         new_model = AIModel(
             name=payload.name,
@@ -227,3 +236,59 @@ async def cloud_stop_camera(camera_id: int, payload: ActionRequest):
             return {"message": f"Send request turn off camera {camera_id} to edge node {payload.edge_id} successfully"}
     except httpx.HTTPError as e:
         raise HTTPException(status_code=503, detail=f"Failed to connect to edge node {payload.edge_id}: {e}")
+
+@app.patch("/api/cloud/edit_camera/{camera_id}")
+async def edit_camera(camera_id: int, payload: CameraEditRequest):
+    async with AsyncSessionLocal() as session:
+        camera_query = await session.execute(select(Camera).where(Camera.id == camera_id))
+        camera = camera_query.scalars().first()
+        if not camera:
+            raise HTTPException(status_code=404, detail=f"Camera {camera_id} not found in database")
+        
+        # Update the camera fields
+        update_data = payload.dict(exclude_unset=True)
+
+        for key, value in update_data.items():
+            setattr(camera, key, value)
+        camera.status = "active"  # Ensure the camera is active after editing
+        
+        await session.commit()
+    return {"message": f"Camera {camera_id} updated successfully"}
+
+@app.patch("/api/cloud/edit_model/{model_id}")
+async def edit_model(model_id: int, payload: ModelEditRequest):
+    async with AsyncSessionLocal() as session:
+        model_query = await session.execute(select(AIModel).where(AIModel.id == model_id))
+        model = model_query.scalars().first()
+        if not model:
+            raise HTTPException(status_code=404, detail=f"Model {model_id} not found in database")
+        
+        # Update the model fields
+        update_data = payload.dict(exclude_unset=True)
+        for key, value in update_data.items():
+            setattr(model, key, value)
+        model.is_active = True
+        await session.commit()
+    return {"message": f"Model {model_id} updated successfully"}
+
+
+
+@app.get("/api/cloud/list_events")
+async def list_events(page: int = 1, limit: int = 10):
+    offset = (page - 1) * limit
+
+    total_query = await AsyncSessionLocal().execute(select(Event.id))
+    total_events = total_query.scalars().all()
+
+    event_query = await AsyncSessionLocal().execute(
+        select(Event).order_by(Event.created_at.desc()).offset(offset).limit(limit)
+    )
+    events = event_query.scalars().all()
+
+    total_pages = (len(total_events) + limit - 1) //limit
+
+    return {
+        "events": events,
+        "total_pages": total_pages,
+        "current_page": page,
+    }

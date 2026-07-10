@@ -10,6 +10,7 @@ from contextlib import asynccontextmanager
 from pydantic import BaseModel
 
 from core.Camera_thread import Camera_thread
+
 from core.frame_buffer import FrameBuffer
 from core.mqtt_sync import mqtt_config_listener, periodic_sync_request
 from database.database import init_db, AsyncSessionLocal, Camera, Event, AIModel
@@ -131,8 +132,10 @@ async def start_camera(camera_id: int, data: CameraStartRequest):
 @app.post("/api/edge/stop_camera/{camera_id}")
 async def stop_camera(camera_id: int):
     if camera_id in cameras:
-        cameras[camera_id].stop()
+        cameras[camera_id].StopCameraStream()
         del cameras[camera_id]
+        
+
         return {"message": f"Camera {camera_id} stopped successfully"}
     else:
         raise HTTPException(status_code=404, detail=f"Camera {camera_id} not found")

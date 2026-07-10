@@ -51,6 +51,10 @@ class Camera_thread(VideoStreamTrack):
 
 
 
+    def StopCameraStream(self):
+        self.is_running = False
+        self.frame_reader.release()
+        print(f"Camera stream {self.camera_id} stopped.")
 
 
     async def get_models_of_camera(self, camera_id):
@@ -100,7 +104,7 @@ class Camera_thread(VideoStreamTrack):
 
         self.last_saved_tracks = {
             tr_id: ts for tr_id, ts in self.last_saved_tracks.items()
-            if (time_event - ts) < (self.gap_time * 2) 
+            if (time_event - ts) < (self.gap_time * 4) 
         }
 
         for det in detections:
@@ -108,7 +112,7 @@ class Camera_thread(VideoStreamTrack):
             if track_id is None:
                 continue
             last_time = self.last_saved_tracks.get(track_id, 0)
-            if  (time_event - last_time) >= self.gap_time:
+            if  (time_event - last_time) >= self.gap_time and track_id not in self.last_saved_tracks:
                 should_save = True
                 self.last_saved_tracks[track_id] = time_event
         
@@ -197,7 +201,7 @@ class Camera_thread(VideoStreamTrack):
         pts, time_base = await self.next_timestamp()
         frame = await asyncio.to_thread(self.frame_reader.read_frame)
         if frame is None:
-            black_frame = cv2.Mat.zeros((480, 640, 3), dtype=np.uint8)
+            black_frame = np.zeros((480, 640, 3), dtype=np.uint8)
             new_frame = av.VideoFrame.from_ndarray(black_frame, format='bgr24')
             new_frame.pts = pts
             new_frame.time_base = time_base
