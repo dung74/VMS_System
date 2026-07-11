@@ -1,7 +1,9 @@
 {% extends "base.html" %}
 
 {% block content %}
-<div class="grid grid-cols-1 xl:grid-cols-3 gap-6">
+<div class="grid grid-cols-1 {% if user.role == 'admin' %}xl:grid-cols-3{% else %}xl:grid-cols-1 max-w-4xl mx-auto{% endif %} gap-6">
+    
+    {% if user.role == 'admin' %}
     <div class="space-y-6 xl:col-span-1">
         <div class="bg-gray-900 p-5 rounded-2xl border border-gray-800 shadow-lg">
             <div class="flex items-center space-x-2 mb-4 border-b border-gray-800 pb-2">
@@ -35,14 +37,15 @@
             </form>
         </div>
     </div>
+    {% endif %}
 
-    <div class="xl:col-span-2 space-y-6">
+    <div class="{% if user.role == 'admin' %}xl:col-span-2{% endif %} space-y-6">
         <div class="bg-gray-900 p-5 rounded-2xl border border-gray-800 shadow-lg">
             <div class="flex justify-between items-center mb-4 border-b border-gray-800 pb-2">
                 <div class="flex items-center space-x-2">
                     <span class="text-lg">⚙️</span><h2 class="text-base font-semibold text-purple-400">Danh sách AI Models</h2>
                 </div>
-                <button onclick="loadModelsTable()" class="text-xs bg-gray-800 hover:bg-gray-700 px-3 py-1.5 rounded-lg">🔄 Làm mới</button>
+                <button onclick="loadModelsTable()" class="text-xs bg-gray-800 hover:bg-gray-700 px-3 py-1.5 rounded-lg border border-gray-700">🔄 Làm mới</button>
             </div>
             <div class="overflow-x-auto">
                 <table class="w-full text-left text-sm text-gray-400">
@@ -51,7 +54,7 @@
                             <th class="px-4 py-3">ID</th>
                             <th class="px-4 py-3">Tên & Loại</th>
                             <th class="px-4 py-3">Đường dẫn</th>
-                            <th class="px-4 py-3 text-center">Tác vụ</th>
+                            {% if user.role == 'admin' %}<th class="px-4 py-3 text-center">Tác vụ</th>{% endif %}
                         </tr>
                     </thead>
                     <tbody id="model-list" class="divide-y divide-gray-800"></tbody>
@@ -64,6 +67,7 @@
 
 {% block scripts %}
 <script>
+    const isAdmin = "{{ user.role }}" === "admin";
     let currentEditModel = null;
 
     document.addEventListener('DOMContentLoaded', () => loadModelsTable());
@@ -72,40 +76,47 @@
         try {
             const res = await fetch('/api/cloud/list_models');
             const data = await res.json();
-            const models = data.models || data;
             const tbody = document.getElementById('model-list');
             tbody.innerHTML = '';
-            models.forEach(m => {
-                tbody.innerHTML += `
+            
+            (data.models || data).forEach(m => {
+                let row = `
                     <tr class="hover:bg-gray-850/50">
                         <td class="px-4 py-3 font-mono font-bold">${m.id}</td>
-                        <td class="px-4 py-3">${m.name} <br><span class="text-xs text-gray-500">${m.type} | ${m.task_type}</span></td>
-                        <td class="px-4 py-3 text-xs font-mono text-gray-500">${m.file_path}</td>
+                        <td class="px-4 py-3 text-gray-200 font-semibold">${m.name} <br><span class="text-xs text-gray-500 font-normal">${m.type} | ${m.task_type}</span></td>
+                        <td class="px-4 py-3 text-xs font-mono text-gray-400">${m.file_path}</td>
+                `;
+                
+                if (isAdmin) {
+                    row += `
                         <td class="px-4 py-3 text-center">
                             <button onclick='editModel(${m.id}, ${JSON.stringify(m.name)}, ${JSON.stringify(m.type)}, ${JSON.stringify(m.task_type)}, ${JSON.stringify(m.file_path)})' class="text-blue-400 hover:text-blue-300 px-2 text-xs">Sửa</button>
                             <button onclick="removeModel(${m.id})" class="text-red-500 hover:text-red-400 px-2 text-xs">Xóa</button>
                         </td>
-                    </tr>`;
+                    `;
+                }
+                row += `</tr>`;
+                tbody.innerHTML += row;
             });
-        } catch(e) { console.error(e); }
+        } catch(e) {}
     }
 
     function editModel(id, name, type, task, path) {
+        if (!isAdmin) return;
         document.getElementById('m_id').value = id;
         document.getElementById('m_name').value = name;
         document.getElementById('m_type').value = type;
         document.getElementById('m_task').value = task || "";
         document.getElementById('m_path').value = path;
         
-        // Lưu trạng thái cũ
         currentEditModel = { name, type, task_type: task || "", file_path: path };
-
         document.getElementById('model-form-title').innerText = "Cập nhật Model #" + id;
         document.getElementById('btn-save-model').innerText = "Lưu thay đổi";
         document.getElementById('btn-cancel-model').classList.remove('hidden');
     }
 
     async function saveModel(e) {
+        if (!isAdmin) return;
         e.preventDefault();
         const id = document.getElementById('m_id').value;
         const newName = document.getElementById('m_name').value;
@@ -114,42 +125,28 @@
         const newPath = document.getElementById('m_path').value;
 
         if (id) {
-            // PATCH LOGIC
             const payload = {};
             if (newName !== currentEditModel.name) payload.name = newName;
             if (newType !== currentEditModel.type) payload.type = newType;
             if (newTask !== currentEditModel.task_type) payload.task_type = newTask;
             if (newPath !== currentEditModel.file_path) payload.file_path = newPath;
 
-            if (Object.keys(payload).length === 0) {
-                alert("Bạn chưa thay đổi thông tin nào!");
-                return;
-            }
+            if (Object.keys(payload).length === 0) return alert("Chưa có thay đổi!");
 
             try {
-                const res = await fetch(`/api/cloud/edit_model/${id}`, { 
-                    method: 'PATCH', 
-                    headers: { 'Content-Type': 'application/json' }, 
-                    body: JSON.stringify(payload) 
-                });
+                const res = await fetch(`/api/cloud/edit_model/${id}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) });
                 if(res.ok) { alert("Cập nhật thành công!"); resetModelForm(); loadModelsTable(); }
-            } catch (err) { console.error(err); }
-
+            } catch (err) {}
         } else {
-            // POST LOGIC
-            const payload = { name: newName, type: newType, task_type: newTask, file_path: newPath };
             try {
-                const res = await fetch('/api/cloud/add_model', { 
-                    method: 'POST', 
-                    headers: { 'Content-Type': 'application/json' }, 
-                    body: JSON.stringify(payload) 
-                });
+                const res = await fetch('/api/cloud/add_model', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ name: newName, type: newType, task_type: newTask, file_path: newPath }) });
                 if(res.ok) { alert("Thêm thành công!"); resetModelForm(); loadModelsTable(); }
-            } catch (err) { console.error(err); }
+            } catch (err) {}
         }
     }
 
     function resetModelForm() {
+        if (!isAdmin) return;
         document.getElementById('form-model').reset();
         document.getElementById('m_id').value = "";
         document.getElementById('model-form-title').innerText = "Thêm Model mới";
@@ -159,11 +156,8 @@
     }
 
     async function removeModel(id) {
-        if(!confirm(`Xóa Model ${id}?`)) return;
-        try { 
-            await fetch(`/api/cloud/remove_model/${id}`, { method: 'POST' }); 
-            loadModelsTable(); 
-        } catch(e) { console.error(e); }
+        if (!isAdmin || !confirm(`Xóa Model ${id}?`)) return;
+        try { await fetch(`/api/cloud/remove_model/${id}`, { method: 'POST' }); loadModelsTable(); } catch(e) {}
     }
 </script>
 {% endblock %}

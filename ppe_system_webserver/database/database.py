@@ -63,6 +63,17 @@ class Event(Base):
     
     created_at = Column(DateTime(timezone=True), default=datetime.utcnow)
 
+
+class User(Base):
+    __tablename__ = 'users'
+
+    id = Column(Integer, primary_key=True, autoincrement=True, index=True)
+    username = Column(String(50), unique=True, index=True, nullable=False)
+    email = Column(String(100), unique=True, index=True, nullable=False)
+    hashed_password = Column(String(255), nullable=False)
+    role = Column(String(20), default='user')  # 'admin' or 'user'
+    
+
 # Hàm tiện ích để tự động tạo bảng nếu chưa có
 async def init_db():
     async with engine.begin() as conn:
@@ -72,50 +83,3 @@ async def init_db():
 
 
 
-# class AIModel(Base):
-#     __tablename__ = 'ai_models'
-    
-#     id = Column(Integer, primary_key=True, autoincrement=True)
-#     name = Column(String(100), nullable=False)
-#     version = Column(String(20), nullable=False)
-#     file_path = Column(String(255), nullable=False)
-#     task_type = Column(String(50), default='detection')
-#     is_active = Column(Boolean, default=True)
-#     created_at = Column(DateTime(timezone=True), default=datetime.utcnow)
-#     updated_at = Column(DateTime(timezone=True), default=datetime.utcnow, onupdate=datetime.utcnow)
-
-# class Camera(Base):
-#     __tablename__ = 'cameras'
-    
-#     id = Column(Integer, primary_key=True, autoincrement=True)
-#     camera_id = Column(String(50), unique=True, nullable=False)
-#     name = Column(String(100), nullable=False)
-#     source = Column(String(255), nullable=False)
-#     location = Column(String(150))
-#     status = Column(String(20), default='active')
-#     current_model_id = Column(Integer, ForeignKey('ai_models.id', ondelete='SET NULL'))
-#     created_at = Column(DateTime(timezone=True), default=datetime.utcnow)
-#     updated_at = Column(DateTime(timezone=True), default=datetime.utcnow, onupdate=datetime.utcnow)
-
-# class Event(Base):
-#     __tablename__ = 'events'
-    
-#     # Sử dụng UUID tự sinh cho khóa chính
-#     id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
-#     camera_id = Column(Integer, ForeignKey('cameras.id', ondelete='CASCADE'))
-#     model_id = Column(Integer, ForeignKey('ai_models.id', ondelete='SET NULL'))
-#     event_type = Column(String(50), nullable=False)
-#     image_path = Column(String(255))
-#     video_path = Column(String(255))
-#     status = Column(String(20), default='pending')
-    
-#     # Trường JSONB mạnh mẽ của PostgreSQL
-#     detections = Column(JSONB, default=list)
-#     metadata_info = Column(JSONB, default=dict) # Đổi tên tránh trùng keyword metadata
-    
-#     created_at = Column(DateTime(timezone=True), default=datetime.utcnow)
-
-# # Hàm tiện ích để tự động tạo bảng nếu chưa có
-# async def init_db():
-#     async with engine.begin() as conn:
-#         await conn.run_sync(Base.metadata.create_all)

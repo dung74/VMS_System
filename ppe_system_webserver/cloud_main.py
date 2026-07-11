@@ -1,18 +1,21 @@
 import asyncio
 import json
 import httpx
-from fastapi import FastAPI, HTTPException, Request, BackgroundTasks
+from fastapi import FastAPI, HTTPException, Request, BackgroundTasks, Depends, Response
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import RedirectResponse
 from fastapi.responses import HTMLResponse
 from fastapi.templating import Jinja2Templates
 from pydantic import BaseModel
 from contextlib import asynccontextmanager
 import aiomqtt
 
-from database.database import AsyncSessionLocal, init_db, Camera, AIModel, Event
+from database.database import AsyncSessionLocal, init_db, Camera, AIModel, Event, User
 from sqlalchemy import select
 
 from core.server_MQTT_sync import mqtt_config_handler
+from core.auth import get_password_hash, verify_password,  create_access_token, get_current_user, require_user, require_admin
+
 from typing import List, Optional
 
 MQTT_BROKER = "localhost"
@@ -33,6 +36,12 @@ class ModelEditRequest(BaseModel):
     file_path: Optional[str] = None
     task_type: Optional[str] = None
     parameters: Optional[dict] = None
+class UserCreate(BaseModel):
+    username: str
+    password: str
+    email: Optional[str] = None
+    role: str = "user"  # Default role is "user"
+
 
 
 async def mqtt_listener_loop():
@@ -101,20 +110,35 @@ class ActionRequest(BaseModel):
 
 
 
+@app.get("/login", response_class=HTMLResponse)
+async def login_page(request: Request):
+    return templates.TemplateResponse(request=request, name="login.html")
+
+
 @app.get("/", response_class=HTMLResponse)
-async def dashboard(request: Request):
-    return templates.TemplateResponse(request=request, name="cameras.html", context={"active_page": "cameras"})
+async def dashboard(request: Request, user: User = Depends(get_current_user)):
+    if not user:
+        return templates.TemplateResponse(request=request, name="login.html")
+    return templates.TemplateResponse(request=request, name="cameras.html", context={"active_page": "cameras", "user": user})
 
 @app.get("/models", response_class=HTMLResponse)
-async def view_models(request: Request):
-    return templates.TemplateResponse(request=request, name="models.html", context={"active_page": "models"})
+async def view_models(request: Request, user: User = Depends(get_current_user)):
+    if not user:
+        return templates.TemplateResponse(request=request, name="login.html")
+    return templates.TemplateResponse(request=request, name="models.html", context={"active_page": "models", "user": user})
 
 @app.get("/events", response_class=HTMLResponse)
-async def view_events(request: Request):
-    return templates.TemplateResponse(request=request, name="events.html", context={"active_page": "events"})
+async def view_events(request: Request, user: User = Depends(get_current_user)):
+    if not user:
+        return templates.TemplateResponse(request=request, name="login.html")
+    return templates.TemplateResponse(request=request, name="events.html", context={"active_page": "events", "user": user})
 
 
-@app.post("/api/cloud/start_camera/{camera_id}")
+
+
+
+
+@app.post("/api/cloud/start_camera/{camera_id}", dependencies=[Depends(require_user)])
 async def cloud_start_camera(camera_id: int, payload: ActionRequest):
     edge_urls = EDGE_NODES.get(payload.edge_id)
     if not edge_urls:
@@ -140,7 +164,7 @@ async def cloud_start_camera(camera_id: int, payload: ActionRequest):
             print(f"Error connecting to edge node {payload.edge_id}: {e}")
             raise HTTPException(status_code=503, detail=f"Failed to connect to edge node {payload.edge_id}: {e}")
 
-@app.get("/api/cloud/get_stream_info/{camera_id}")
+@app.get("/api/cloud/get_stream_info/{camera_id}", dependencies=[Depends(require_user)])
 async def get_stream_info(camera_id: int):
     edge_id = "edge_node_1"
     edge_urls = EDGE_NODES.get(edge_id)
@@ -149,7 +173,22 @@ async def get_stream_info(camera_id: int):
         "camera_id": camera_id,
         "webrtc_offer_url": f"{edge_urls}/offer/{camera_id}"
     }
-@app.post("/api/cloud/add_camera")
+
+@app.post("/api/cloud/stop_camera/{camera_id}", dependencies=[Depends(require_user)])
+async def cloud_stop_camera(camera_id: int, payload: ActionRequest):
+    edge_urls = EDGE_NODES.get(payload.edge_id)
+    if not edge_urls:
+        raise HTTPException(status_code=400, detail="Not found IP for edge node")
+    
+    try:
+        async with httpx.AsyncClient() as client:
+            resp = await client.post(f"{edge_urls}/api/edge/stop_camera/{camera_id}")
+            resp.raise_for_status()
+            return {"message": f"Send request turn off camera {camera_id} to edge node {payload.edge_id} successfully"}
+    except httpx.HTTPError as e:
+        raise HTTPException(status_code=503, detail=f"Failed to connect to edge node {payload.edge_id}: {e}")
+    
+@app.post("/api/cloud/add_camera", dependencies=[Depends(require_admin)])
 async def add_camera(payload: CameraEditRequest):
 
     async with AsyncSessionLocal() as session:
@@ -165,7 +204,7 @@ async def add_camera(payload: CameraEditRequest):
         await session.commit()
     return {"message": f"Camera {new_camera.name} added successfully"}
 
-@app.post("/api/cloud/remove_camera/{camera_id}")
+@app.post("/api/cloud/remove_camera/{camera_id}", dependencies=[Depends(require_admin)])
 async def remove_camera(camera_id: int, payload: ActionRequest):
     edge_urls = EDGE_NODES.get(payload.edge_id)
     if not edge_urls:
@@ -182,7 +221,7 @@ async def remove_camera(camera_id: int, payload: ActionRequest):
     return {"message": f"Camera {camera_id} removed successfully from edge node {payload.edge_id}"}
 
 
-@app.post("/api/cloud/add_model")
+@app.post("/api/cloud/add_model", dependencies=[Depends(require_admin)])
 async def add_model(payload: ModelEditRequest):
     async with AsyncSessionLocal() as session:
         new_model = AIModel(
@@ -197,7 +236,7 @@ async def add_model(payload: ModelEditRequest):
         await session.commit()
     return {"message": f"Model {new_model.name} added successfully to cloud database"}
 
-@app.post("/api/cloud/remove_model/{model_id}")
+@app.post("/api/cloud/remove_model/{model_id}", dependencies=[Depends(require_admin)])
 async def remove_model(model_id: int):
     async with AsyncSessionLocal() as session:
         model_query = await session.execute(select(AIModel).where(AIModel.id == model_id))
@@ -209,35 +248,23 @@ async def remove_model(model_id: int):
         await session.commit()
     return {"message": f"Model {model_id} removed successfully from cloud database"}
 
-@app.get("/api/cloud/list_cameras")
+@app.get("/api/cloud/list_cameras", dependencies=[Depends(require_user)])
 async def list_cameras():
     async with AsyncSessionLocal() as session:
         camera_query = await session.execute(select(Camera))
         cameras = camera_query.scalars().all()
     return {"cameras": cameras}
 
-@app.get("/api/cloud/list_models")
+@app.get("/api/cloud/list_models", dependencies=[Depends(require_user)])
 async def list_models():
     async with AsyncSessionLocal() as session:
         model_query = await session.execute(select(AIModel))
         models = model_query.scalars().all()
     return {"models": models}
 
-@app.post("/api/cloud/stop_camera/{camera_id}")
-async def cloud_stop_camera(camera_id: int, payload: ActionRequest):
-    edge_urls = EDGE_NODES.get(payload.edge_id)
-    if not edge_urls:
-        raise HTTPException(status_code=400, detail="Not found IP for edge node")
-    
-    try:
-        async with httpx.AsyncClient() as client:
-            resp = await client.post(f"{edge_urls}/api/edge/stop_camera/{camera_id}")
-            resp.raise_for_status()
-            return {"message": f"Send request turn off camera {camera_id} to edge node {payload.edge_id} successfully"}
-    except httpx.HTTPError as e:
-        raise HTTPException(status_code=503, detail=f"Failed to connect to edge node {payload.edge_id}: {e}")
 
-@app.patch("/api/cloud/edit_camera/{camera_id}")
+
+@app.patch("/api/cloud/edit_camera/{camera_id}", dependencies=[Depends(require_admin)])
 async def edit_camera(camera_id: int, payload: CameraEditRequest):
     async with AsyncSessionLocal() as session:
         camera_query = await session.execute(select(Camera).where(Camera.id == camera_id))
@@ -255,7 +282,7 @@ async def edit_camera(camera_id: int, payload: CameraEditRequest):
         await session.commit()
     return {"message": f"Camera {camera_id} updated successfully"}
 
-@app.patch("/api/cloud/edit_model/{model_id}")
+@app.patch("/api/cloud/edit_model/{model_id}", dependencies=[Depends(require_admin)])
 async def edit_model(model_id: int, payload: ModelEditRequest):
     async with AsyncSessionLocal() as session:
         model_query = await session.execute(select(AIModel).where(AIModel.id == model_id))
@@ -273,7 +300,7 @@ async def edit_model(model_id: int, payload: ModelEditRequest):
 
 
 
-@app.get("/api/cloud/list_events")
+@app.get("/api/cloud/list_events", dependencies=[Depends(require_user)])
 async def list_events(page: int = 1, limit: int = 10):
     offset = (page - 1) * limit
 
@@ -292,3 +319,43 @@ async def list_events(page: int = 1, limit: int = 10):
         "total_pages": total_pages,
         "current_page": page,
     }
+
+@app.post("/api/cloud/auth/register")
+async def register_user(user: UserCreate):
+    async with AsyncSessionLocal() as session:
+        result = await session.execute(select(User).where(User.username == user.username))
+        if result.scalars().first():
+            raise HTTPException(status_code=400, detail="Username already exists")
+        print(f"Registering new user: {user.username}, role: {user.role}, password: {user.password}")
+        new_user = User(
+            username=user.username,
+            hashed_password=get_password_hash(user.password),
+            email=user.email,
+            role= "user"
+        )
+        session.add(new_user)
+        await session.commit()
+    return {"message": "User registered successfully", "username": new_user.username, "role": new_user.role}
+
+
+
+
+@app.post("/api/cloud/auth/login")
+async def login_user(response: Response, user: UserCreate):
+    async with AsyncSessionLocal() as session:
+        result = await session.execute(select(User).where(User.username == user.username))
+        db_user = result.scalars().first()
+
+        if not db_user or not verify_password(user.password, db_user.hashed_password):
+            raise HTTPException(status_code=400, detail="Invalid username or password")
+        
+        access_token = create_access_token(data={"sub": db_user.username, "role": db_user.role})
+        response.set_cookie(key="access_token", value=f"Bearer {access_token}", httponly=True, max_age=86400)  # 1 day in seconds
+        return {"message": "Login successful", "access_token": access_token, "token_type": "bearer", "role": db_user.role}
+    
+
+
+@app.post("/api/cloud/auth/logout")
+async def logout_user(response: Response):
+    response.delete_cookie(key="access_token")
+    return {"message": "Logout successful"}
