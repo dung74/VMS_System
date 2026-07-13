@@ -15,6 +15,13 @@ import aiomqtt
 import numpy as np
 
 from core.model_factory import ModelFactory
+import requests
+import uuid
+from datetime import datetime, timezone, timedelta
+
+import httpx
+
+VN_TZ = timezone(timedelta(hours=7))  # Vietnam timezone (UTC+7)
 
 MQTT_BROKER_URL = "localhost"
 MQTT_PORT = 1883
@@ -27,6 +34,9 @@ MQTT_PORT = 1883
             #             "detections": detections,
             #             "timestamp": time.time()
             #         }
+
+EDGE_URL = "http://localhost:8000"  # Replace with your actual edge URL
+TIME_RESET_TRACKS = 6
 
 
 class Camera_thread(VideoStreamTrack):
@@ -48,7 +58,7 @@ class Camera_thread(VideoStreamTrack):
         self.is_running = True
         self.last_saved_tracks = {} 
         self.gap_time = 2
-
+        self.backgroud_task = set()
 
 
     def StopCameraStream(self):
@@ -129,6 +139,7 @@ class Camera_thread(VideoStreamTrack):
         try:
             async with AsyncSessionLocal() as session:
                 new_event = Event(
+                    event_code=payload.get("event_code", str(uuid.uuid4().hex)),
                     camera_id=self.camera_id,
                     model_id=payload.get("model_id"),  # You can set this if you have a specific model ID
                     event_type=event_type,
@@ -143,6 +154,49 @@ class Camera_thread(VideoStreamTrack):
                 print(f"Event saved to database for camera {self.camera_id}")
         except Exception as e:
             print(f"Error saving event to database for camera {self.camera_id}: {e}")
+
+
+    async def handle_event(self, edge_url: str, payload: dict, frame_result):
+
+        upload_url = f"{edge_url}/api/cloud/upload_image"
+
+        success, encoded_image = cv2.imencode('.jpg', frame_result)
+        if not success:
+            print(f"Failed to encode image for camera {self.camera_id}")
+            return
+        image_bytes = encoded_image.tobytes()
+        event_code = payload.get("event_code", str(uuid.uuid4().hex))
+        
+        form_data = {
+            "camera_id": str(self.camera_id),
+            "event_type": payload.get("event_type", "object_detected"),
+            "event_code": event_code,
+            "event_datetime": str(payload.get("event_datetime", datetime.now(VN_TZ).strftime("%Y-%m-%d %H:%M:%S"))),
+        }
+
+        files = {
+            "file": (f"{event_code}.jpg", image_bytes, "image/jpeg")
+        }
+
+
+        try:
+            async with httpx.AsyncClient() as client:
+                print(f"Uploading image for camera {self.camera_id}, event {event_code} to {upload_url}")
+                response = await client.post(upload_url, data=form_data, files=files, timeout=10)
+                if response.status_code == 422:
+                    print(f"Error 422: {response.text}")
+
+                response.raise_for_status()
+                
+                print(f"Image uploaded successfully for camera {self.camera_id}, event {event_code}")
+        except httpx.HTTPError as e:
+            print(f"Failed to upload image for camera {self.camera_id}, event {event_code}: {e}")
+
+        
+        
+        
+
+
 
     async def _ai_worker_loop(self):
         print("AI worker loop started")
@@ -177,10 +231,25 @@ class Camera_thread(VideoStreamTrack):
 
                                     for payload in all_payload:
                                         if self.check_if_event_should_be_saved(payload):
+                                            event_code = str(uuid.uuid4().hex)
+                                            payload["event_code"] = event_code
 
-                                            asyncio.create_task(self.save_event_to_db(payload))
+                                            # asyncio.create_task(self.save_event_to_db(payload))
 
                                             await client.publish(topic, payload=json.dumps(payload))
+                                            # self.handle_event(edge_url=EDGE_URL, payload=payload, frame_result=result_frame)
+                                            task = asyncio.create_task(
+                                                
+                                                    self.handle_event(
+                                                        edge_url=EDGE_URL,
+                                                        payload=payload,
+                                                        frame_result=result_frame
+                                                        )
+                                                )
+                                            self.backgroud_task.add(task)
+                                            task.add_done_callback(self.backgroud_task.discard)
+
+
                                     # print(f"Published event {event_type_str}")
                     except Exception as e:
                         print(f"Error in AI worker loop: {e}")

@@ -1,22 +1,32 @@
 import asyncio
+from datetime import datetime, timedelta, timezone
 import json
+import shutil
+import uuid
 import httpx
-from fastapi import FastAPI, HTTPException, Request, BackgroundTasks, Depends, Response
+from fastapi import FastAPI, HTTPException, Request, BackgroundTasks, Depends, Response, UploadFile, File, Form
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import RedirectResponse
-from fastapi.responses import HTMLResponse
+from fastapi.responses import RedirectResponse, HTMLResponse
 from fastapi.templating import Jinja2Templates
+from fastapi.staticfiles import StaticFiles
+
 from pydantic import BaseModel
 from contextlib import asynccontextmanager
 import aiomqtt
 
 from database.database import AsyncSessionLocal, init_db, Camera, AIModel, Event, User
 from sqlalchemy import select
+from sqlalchemy.exc import IntegrityError
 
 from core.server_MQTT_sync import mqtt_config_handler
 from core.auth import get_password_hash, verify_password,  create_access_token, get_current_user, require_user, require_admin
 
 from typing import List, Optional
+
+import os
+
+VN_TZ = timezone(timedelta(hours=7))  # Vietnam timezone (UTC+7)
+
 
 MQTT_BROKER = "localhost"
 MQTT_PORT = 1883
@@ -25,6 +35,8 @@ EDGE_NODES={
     "edge_node_1": "http://127.0.0.1:8001"
 
 }
+
+
 class CameraEditRequest(BaseModel):
     name: Optional[str] = None
     source: Optional[str] = None
@@ -64,6 +76,7 @@ async def mqtt_listener_loop():
 
                         if cam_db:
                             new_event = Event(
+                                event_code=event_data.get("event_code", str(uuid.uuid4().hex)),
                                 camera_id=event_data["camera_id"],
                                 model_id=event_data["model_id"],
                                 event_type=event_data["event_type"],
@@ -103,6 +116,11 @@ async def lifespan(app: FastAPI):
 app = FastAPI(lifespan=lifespan)
 app.add_middleware(CORSMiddleware, allow_origins=["*"], allow_methods=["*"], allow_headers=["*"])
 templates = Jinja2Templates(directory="templates")
+
+
+os.makedirs("static_images", exist_ok=True)
+app.mount("/media", StaticFiles(directory="static_images"), name="media")
+
 
 class ActionRequest(BaseModel):
     edge_id: str
@@ -359,3 +377,84 @@ async def login_user(response: Response, user: UserCreate):
 async def logout_user(response: Response):
     response.delete_cookie(key="access_token")
     return {"message": "Logout successful"}
+
+
+
+def cleanup_old_images(base_dir: str = "static_images", keep_days: int = 3):
+
+    if not os.path.exists(base_dir):
+        print(f"Directory {base_dir} does not exist. No cleanup needed.")
+        return
+    current_date = datetime.now(VN_TZ).date()
+    for folder_name in os.listdir(base_dir):
+        folder_path = os.path.join(base_dir, folder_name)
+
+        if os.path.isdir(folder_path):
+            try:
+                folder_date = datetime.strptime(folder_name, "%Y-%m-%d").date()
+                delta_days = (current_date - folder_date).days
+                if delta_days > keep_days:
+                    shutil.rmtree(folder_path)
+                    print(f"Deleted folder {folder_path} as it is older than {keep_days} days.")
+            except ValueError:
+                print(f"Skipping folder {folder_path} as it does not match the date format YYYY-MM-DD.")
+                continue
+
+@app.post("/api/cloud/upload_image")
+async def upload_image(
+    background_tasks: BackgroundTasks,
+    camera_id: int = Form(...),
+    event_type: str = Form(...),
+    event_code: str = Form(...),
+    event_datetime: str = Form(...),
+    file: UploadFile = File(...)
+    ):
+
+    date_part, time_part = event_datetime.split(" ")
+    date_folder = date_part
+    time_str = time_part.replace(":", "-")  # Replace ':' with '-' for filename compatibility
+
+
+    background_tasks.add_task(cleanup_old_images)
+
+    relative_folder = os.path.join(date_folder, f"cam{camera_id}")
+    absolute_folder = os.path.join("static_images", relative_folder)
+    os.makedirs(absolute_folder, exist_ok=True)
+
+
+
+    file_name = f"cam{camera_id}_{event_type}_{event_code}_{time_str}.jpg"
+    file_path = os.path.join(absolute_folder, file_name)
+
+    with open(file_path, "wb") as buffer:
+        buffer.write(await file.read())
+
+    db_image_path = f"/media/{relative_folder}/{file_name}".replace("\\", "/")  # Ensure the path uses forward slashes
+
+    async with AsyncSessionLocal() as session:
+        event_of_image_query = await session.execute(select(Event).where(Event.event_code == event_code))
+        event_of_image = event_of_image_query.scalars().first()
+        if event_of_image:
+            event_of_image.image_path = db_image_path
+            await session.commit()
+        else:
+            try:
+
+                new_event = Event(
+                    event_code=event_code,
+                    camera_id=camera_id,
+                    model_id=None,
+                    event_type=event_type,
+                    image_path=db_image_path,
+                    video_path=None,
+                    status='pending',
+                    detections=[],
+                    metadata_info={"event_datetime": event_datetime}
+                )
+                session.add(new_event)
+                await session.commit()
+            except IntegrityError:
+                await session.rollback()
+                return {"message": f"Event with event_code {event_code} already exists. Image not saved to database."}
+    
+    return {"message": "Image uploaded successfully", "image_path": db_image_path}

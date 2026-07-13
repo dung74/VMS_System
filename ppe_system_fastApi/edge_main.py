@@ -15,10 +15,10 @@ from core.frame_buffer import FrameBuffer
 from core.mqtt_sync import mqtt_config_listener, periodic_sync_request
 from database.database import init_db, AsyncSessionLocal, Camera, Event, AIModel
 
-import uuid
 from sqlalchemy import text
 import aiofiles
 import httpx
+
 
 
 EDGE_ID = "edge_node_1"

@@ -1,5 +1,6 @@
 import asyncio
 import time
+from datetime import datetime, timezone, timedelta
 
 from requests import session
 from ultralytics import YOLO
@@ -7,6 +8,11 @@ import cv2
 from database.database import AsyncSessionLocal, Camera, AIModel, Event
 import json
 from core.model_factory import ModelFactory
+# from ppe_system_fastApi.core.Camera_thread import VN_TZ
+
+VN_TZ = timezone(timedelta(hours=7))  # Vietnam timezone (UTC+7)
+
+
 
 class ModelPredictor:
     def __init__(self, camera_id):
@@ -43,6 +49,7 @@ class ModelPredictor:
           
 
             # send mqtt message with detections
+            time
             payload = {
                         "edge_id": 'edge_001',
                         "camera_id":self.camera_id,
@@ -50,7 +57,8 @@ class ModelPredictor:
                         "model_id": model_id,
                         "event_type": "object_detected",
                         "detections": detections,
-                        "timestamp": time.time()
+                        "timestamp": time.time(),
+                        "datetime": datetime.now(VN_TZ).strftime("%Y-%m-%d %H:%M:%S")
                     }
             all_payload.append(payload)
 

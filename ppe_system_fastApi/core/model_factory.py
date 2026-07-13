@@ -6,7 +6,8 @@ class ModelFactory:
 
     MODEL_MAPPING = {
         'person_card': 'ai_models.person_card.PersonCardPredictor',
-        'cell_phone': 'ai_models.cell_phone.CellPhonePredictor'
+        'cell_phone': 'ai_models.cell_phone.CellPhonePredictor',
+        'person_only': 'ai_models.person_only.PersonOnlyPredictor',
     }
 
     PARAMETER_MAPPING_DEFAULT = {
@@ -19,6 +20,10 @@ class ModelFactory:
         'cell_phone': {
             'confidence_threshold': 0.5,
             'model_path': 'models/yolov8n.pt',
+        },
+        'person_only': {
+            'confidence_threshold': 0.5,
+            'model_path': 'models/yolo11n.pt',
         }
     }
 

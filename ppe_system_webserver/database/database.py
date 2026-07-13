@@ -1,5 +1,5 @@
 import uuid
-from datetime import datetime
+from datetime import datetime, timedelta, timezone
 from sqlalchemy.ext.asyncio import create_async_engine, AsyncSession, async_sessionmaker
 from sqlalchemy.orm import declarative_base, relationship
 from sqlalchemy import Column, Integer, String, Boolean, DateTime, ForeignKey
@@ -13,6 +13,14 @@ engine = create_async_engine(DATABASE_URL, echo=False)
 AsyncSessionLocal = async_sessionmaker(engine, expire_on_commit=False, class_=AsyncSession)
 
 Base = declarative_base()
+
+
+VN_TZ = timezone(timedelta(hours=7))  # Vietnam timezone (UTC+7)
+def get_vn_timezone():
+    
+    return datetime.now(VN_TZ)  # Vietnam timezone (UTC+7)
+
+
 
 # =====================================================================
 # 2. ĐỊNH NGHĨA CÁC CLASS (ORM MODELS)
@@ -29,8 +37,8 @@ class AIModel(Base):
     task_type = Column(String(50), default='detection')
     parameters = Column(JSONB, default=dict)  
     is_active = Column(Boolean, default=True)
-    created_at = Column(DateTime(timezone=True), default=datetime.utcnow)
-    updated_at = Column(DateTime(timezone=True), default=datetime.utcnow, onupdate=datetime.utcnow)
+    created_at = Column(DateTime(timezone=True), default=get_vn_timezone)
+    updated_at = Column(DateTime(timezone=True), default=get_vn_timezone, onupdate=get_vn_timezone)
 
 class Camera(Base):
     __tablename__ = 'cameras'
@@ -42,14 +50,15 @@ class Camera(Base):
     location = Column(String(150))
     status = Column(String(20), default='active')
     current_model_id = Column(JSONB, default=list)  # Store a list of model IDs
-    created_at = Column(DateTime(timezone=True), default=datetime.utcnow)
-    updated_at = Column(DateTime(timezone=True), default=datetime.utcnow, onupdate=datetime.utcnow)
+    created_at = Column(DateTime(timezone=True), default=get_vn_timezone)
+    updated_at = Column(DateTime(timezone=True), default=get_vn_timezone, onupdate=get_vn_timezone)
 
 class Event(Base):
     __tablename__ = 'events'
     
     # Sử dụng UUID tự sinh cho khóa chính
     id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    event_code = Column(String(100), unique=True, nullable=False)
     camera_id = Column(Integer, ForeignKey('cameras.id', ondelete='CASCADE'))
     model_id = Column(Integer, ForeignKey('ai_models.id', ondelete='SET NULL'))
     event_type = Column(String(50), nullable=False)
@@ -61,7 +70,7 @@ class Event(Base):
     detections = Column(JSONB, default=list)
     metadata_info = Column(JSONB, default=dict) # Đổi tên tránh trùng keyword metadata
     
-    created_at = Column(DateTime(timezone=True), default=datetime.utcnow)
+    created_at = Column(DateTime(timezone=True), default=get_vn_timezone)
 
 
 class User(Base):

@@ -14,7 +14,7 @@ MQTT_PORT = 1883
 TOPIC_LISTEN_EVENTS = "edge/edge_node_1/sync_request"
 
 async def get_latest_config_from_db(edge_id: str) -> dict:
-    print(f"Fetching latest config for edge_id: {edge_id} from database...")
+    # print(f"Fetching latest config for edge_id: {edge_id} from database...")
     async with AsyncSessionLocal() as db:
 
         result_cams = await db.execute(select(Camera).where(Camera.status == 'active'))
@@ -44,7 +44,7 @@ async def get_latest_config_from_db(edge_id: str) -> dict:
                 "is_active": model.is_active
             })
 
-            print(f"model_id: {model.id}, type: {type(model.id)}")  # Debugging line
+            # print(f"model_id: {model.id}, type: {type(model.id)}")  # Debugging line
         return {
             "type": "full_sync",
             "cameras": cam_list,
@@ -53,7 +53,7 @@ async def get_latest_config_from_db(edge_id: str) -> dict:
 
 async def mqtt_config_handler():
 
-    print(f"Starting MQTT config handler, listening to topic: {TOPIC_LISTEN_EVENTS}")
+    # print(f"Starting MQTT config handler, listening to topic: {TOPIC_LISTEN_EVENTS}")
     while True:
         try:
             async with aiomqtt.Client(hostname=MQTT_HOSTNAME, port=MQTT_PORT) as client:
@@ -64,7 +64,7 @@ async def mqtt_config_handler():
                         request_data = json.loads(payload_str)
                         if request_data.get("action") == "request_full_sync":
                             edge_id = request_data.get("edge_id")
-                            print(f"Received full sync request from edge_id: {edge_id}")
+                            # print(f"Received full sync request from edge_id: {edge_id}")
                             if edge_id:
                                 latest_config = await get_latest_config_from_db(edge_id)
                                 response_topic = f"server/config/{edge_id}"
