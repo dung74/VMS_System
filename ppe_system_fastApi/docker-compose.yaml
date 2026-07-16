@@ -1,0 +1,58 @@
+version: '3.8'
+
+services:
+  edge_db:
+    image: postgres:13
+    container_name: edge_db
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: 123456
+      POSTGRES_DB: ppe_db_edge
+    ports:
+      - "5436:5432"
+    volumes:
+      - edge_pgdata:/var/lib/postgresql/data
+    networks:
+      - ppe_shared_net
+  
+  edge_mqtt:
+    image: eclipse-mosquitto:2.0
+    container_name: edge_mqtt
+    ports:
+      - "1885:1883"
+      - "9002:9001"
+    command: mosquitto -c /mosquitto-no-auth.conf
+    volumes:
+      - ./mosquitto.conf:/mosquitto-no-auth.conf
+    networks:
+      - ppe_shared_net
+
+  edge_ai:
+    build: .
+    container_name: edge_ai
+    ports:
+      - "8001:8001"
+    depends_on:
+      - edge_db
+      - edge_mqtt
+    environment:
+      PYTHONUNBUFFERED: 1
+      DATABASE_URL: postgresql+asyncpg://postgres:123456@edge_db:5432/ppe_db_edge
+      MQTT_BROKER: edge_mqtt
+      MQTT_PORT: 1883
+      EDGE_URL: http://cloud_api:8000
+    volumes:
+      - .:/app 
+    networks:
+      - ppe_shared_net
+    devices:
+      - "/dev/video0:/dev/video0"
+      - "/dev/video4:/dev/video4"
+
+volumes:
+  edge_pgdata:
+
+networks:
+  ppe_shared_net:
+    external: true
+

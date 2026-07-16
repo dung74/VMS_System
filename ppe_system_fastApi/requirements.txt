@@ -1,0 +1,15 @@
+aiofiles
+aiomqtt
+aiortc
+asyncpg
+fastapi
+httpx
+numpy
+opencv-python
+pydantic
+requests
+SQLAlchemy
+ultralytics
+av
+uvicorn[standard]
+lapx>=0.5.2

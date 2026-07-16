@@ -1,0 +1,10 @@
+7/7/2026 
+    done :da luong camera, dong bo data moi 30s  mot lan tu edge toi server.
+    next mission: dong bo cac truogn dong db dam bao chi co 1 id, xem lai kieu du lieu db, update cac tinh nang them, sua, xoa model cho dung voi db., 
+                  loi add camera
+
+
+7/8/2026
+    done : chay multi model, 
+    next mission: dong bo cac truogn dong db dam bao chi co 1 id, xem lai kieu du lieu db, update cac tinh nang them, sua, xoa model cho dung voi db., 
+                  loi add camera

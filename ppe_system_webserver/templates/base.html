@@ -1,0 +1,72 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Hệ thống Giám sát Trung tâm - Cloud VMS</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        @keyframes pulse-red { 0%, 100% { opacity: 1; } 50% { opacity: 0.5; } }
+        .live-indicator { animation: pulse-red 1.5s infinite; }
+        ::-webkit-scrollbar { width: 6px; }
+        ::-webkit-scrollbar-track { background: #1f2937; }
+        ::-webkit-scrollbar-thumb { background: #4b5563; border-radius: 3px; }
+        select[multiple] option { padding: 8px; border-radius: 4px; margin-bottom: 2px; }
+        select[multiple]:focus option:checked { background: #6b21a8 linear-gradient(0deg, #6b21a8 0%, #6b21a8 100%); color: white; }
+        .nav-link.active { border-bottom-color: #3b82f6; color: #3b82f6; }
+    </style>
+</head>
+<body class="bg-gray-950 text-gray-100 font-sans min-h-screen flex flex-col">
+
+    <header class="bg-gray-900 border-b border-gray-800 shadow-xl sticky top-0 z-50">
+        <div class="px-6 py-4 flex justify-between items-center">
+            <div class="flex items-center space-x-3">
+                <span class="text-3xl">🛡️</span>
+                <div>
+                    <h1 class="text-xl font-bold bg-gradient-to-r from-blue-400 to-purple-500 bg-clip-text text-transparent">AI VMS CLOUD PLATFORM</h1>
+                    <p class="text-xs text-gray-500">Hệ thống Điều phối & Quản lý Camera Phân tán</p>
+                </div>
+            </div>
+            
+            <div class="flex items-center space-x-5">
+                <div class="flex items-center space-x-2 text-right">
+                    <span class="w-2.5 h-2.5 rounded-full bg-green-500 inline-block mt-1"></span>
+                    <div>
+                        <p class="font-medium text-gray-200 text-sm">
+                            {{ user.username }} 
+                            <span class="text-xs px-1.5 py-0.5 rounded {% if user.role == 'admin' %}bg-red-900/50 text-red-400{% else %}bg-blue-900/50 text-blue-400{% endif %} uppercase ml-1">
+                                {{ user.role }}
+                            </span>
+                        </p>
+                        <p class="text-xs text-gray-500">{{ user.email }}</p>
+                    </div>
+                </div>
+                <button onclick="logout()" class="text-xs bg-gray-800 border border-gray-700 hover:bg-red-600 hover:text-white hover:border-red-500 text-gray-300 px-3 py-1.5 rounded-lg transition-all">Đăng xuất</button>
+            </div>
+        </div>
+        
+        <nav class="flex px-6 space-x-6 border-t border-gray-800 text-sm font-medium text-gray-400">
+            <a href="/" class="nav-link {% if active_page == 'cameras' %}active{% endif %} py-3 border-b-2 border-transparent hover:text-gray-200 transition-all">📹 Quản lý Camera</a>
+            <a href="/models" class="nav-link {% if active_page == 'models' %}active{% endif %} py-3 border-b-2 border-transparent hover:text-gray-200 transition-all">📦 Quản lý Model</a>
+            <a href="/events" class="nav-link {% if active_page == 'events' %}active{% endif %} py-3 border-b-2 border-transparent hover:text-gray-200 transition-all">🚨 Quản lý Sự kiện</a>
+        </nav>
+    </header>
+
+    <main class="flex-1 max-w-7xl w-full mx-auto p-6">
+        {% block content %}{% endblock %}
+    </main>
+
+    <script>
+        const DEFAULT_EDGE = "edge_node_1";
+        
+        async function logout() {
+            try {
+                await fetch('/api/cloud/auth/logout', { method: 'POST' });
+                window.location.href = '/login';
+            } catch (error) { console.error(error); }
+        }
+    </script>
+    
+    {% block scripts %}{% endblock %}
+</body>
+</html>

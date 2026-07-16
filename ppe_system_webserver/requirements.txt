@@ -1,0 +1,19 @@
+aiofiles
+aiomqtt
+aiortc
+asyncpg
+fastapi
+httpx
+numpy
+# opencv-python
+pydantic
+requests
+SQLAlchemy
+av
+uvicorn[standard]
+uuid
+typing
+python-jose[cryptography]
+passlib
+jinja2
+python-multipart

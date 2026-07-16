@@ -1,0 +1,143 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Xác thực - Cloud VMS</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        .tab-btn.active { border-bottom-color: #3b82f6; color: #3b82f6; }
+    </style>
+</head>
+<body class="bg-gray-950 flex items-center justify-center min-h-screen">
+    
+    <div class="bg-gray-900 p-8 rounded-2xl border border-gray-800 shadow-2xl w-full max-w-md">
+        <div class="text-center mb-6">
+            <span class="text-5xl">🛡️</span>
+            <h2 class="text-2xl font-bold bg-gradient-to-r from-blue-400 to-purple-500 bg-clip-text text-transparent mt-3">AI VMS CLOUD</h2>
+            <p class="text-gray-500 text-sm mt-1">Hệ thống giám sát trung tâm</p>
+        </div>
+
+        <!-- Chuyển đổi Tab -->
+        <div class="flex border-b border-gray-800 mb-6 text-sm">
+            <button onclick="switchTab('login')" id="tab-login-btn" class="flex-1 pb-2 border-b-2 border-blue-500 text-blue-500 font-semibold transition-colors">Đăng nhập</button>
+            <button onclick="switchTab('register')" id="tab-register-btn" class="flex-1 pb-2 border-b-2 border-transparent text-gray-500 hover:text-gray-300 font-semibold transition-colors">Đăng ký</button>
+        </div>
+
+        <!-- FORM ĐĂNG NHẬP -->
+        <form id="form-login" onsubmit="login(event)" class="space-y-4 text-sm">
+            <div>
+                <label class="block text-gray-400 mb-1">Tài khoản</label>
+                <input type="text" id="l_username" class="w-full bg-gray-950 border border-gray-800 rounded-lg p-3 text-white outline-none focus:border-blue-500 transition-all" required>
+            </div>
+            <div>
+                <label class="block text-gray-400 mb-1">Mật khẩu</label>
+                <input type="password" id="l_password" class="w-full bg-gray-950 border border-gray-800 rounded-lg p-3 text-white outline-none focus:border-blue-500 transition-all" required>
+            </div>
+            <button type="submit" class="w-full bg-blue-600 hover:bg-blue-500 text-white font-bold py-3 rounded-lg mt-2 shadow-lg shadow-blue-900/30 transition-all">Đăng nhập hệ thống</button>
+        </form>
+
+        <!-- FORM ĐĂNG KÝ -->
+        <form id="form-register" onsubmit="register(event)" class="space-y-4 text-sm hidden">
+            <div>
+                <label class="block text-gray-400 mb-1">Tên tài khoản</label>
+                <input type="text" id="r_username" class="w-full bg-gray-950 border border-gray-800 rounded-lg p-3 text-white outline-none focus:border-blue-500 transition-all" required>
+            </div>
+            <div>
+                <label class="block text-gray-400 mb-1">Email</label>
+                <input type="email" id="r_email" class="w-full bg-gray-950 border border-gray-800 rounded-lg p-3 text-white outline-none focus:border-blue-500 transition-all" required>
+            </div>
+            <div>
+                <label class="block text-gray-400 mb-1">Mật khẩu</label>
+                <input type="password" id="r_password" class="w-full bg-gray-950 border border-gray-800 rounded-lg p-3 text-white outline-none focus:border-blue-500 transition-all" required>
+            </div>
+            <div>
+                <label class="block text-gray-400 mb-1">Phân quyền</label>
+                <select id="r_role" class="w-full bg-gray-950 border border-gray-800 rounded-lg p-3 text-white outline-none focus:border-blue-500 transition-all">
+                    <option value="user">User (Chỉ xem)</option>
+                    <option value="admin">Admin (Toàn quyền)</option>
+                </select>
+            </div>
+            <button type="submit" class="w-full bg-purple-600 hover:bg-purple-500 text-white font-bold py-3 rounded-lg mt-2 shadow-lg shadow-purple-900/30 transition-all">Tạo tài khoản</button>
+        </form>
+
+        <div id="error-msg" class="mt-4 text-red-500 text-center text-sm hidden font-medium"></div>
+    </div>
+
+    <script>
+        function switchTab(tab) {
+            document.getElementById('form-login').classList.toggle('hidden', tab !== 'login');
+            document.getElementById('form-register').classList.toggle('hidden', tab !== 'register');
+            
+            document.getElementById('tab-login-btn').className = tab === 'login' 
+                ? "flex-1 pb-2 border-b-2 border-blue-500 text-blue-500 font-semibold transition-colors" 
+                : "flex-1 pb-2 border-b-2 border-transparent text-gray-500 hover:text-gray-300 font-semibold transition-colors";
+                
+            document.getElementById('tab-register-btn').className = tab === 'register' 
+                ? "flex-1 pb-2 border-b-2 border-purple-500 text-purple-500 font-semibold transition-colors" 
+                : "flex-1 pb-2 border-b-2 border-transparent text-gray-500 hover:text-gray-300 font-semibold transition-colors";
+            
+            document.getElementById('error-msg').classList.add('hidden');
+        }
+
+        function showError(msg) {
+            const errEl = document.getElementById('error-msg');
+            errEl.innerText = msg;
+            errEl.classList.remove('hidden');
+        }
+
+        async function login(e) {
+            e.preventDefault();
+            const payload = {
+                username: document.getElementById('l_username').value,
+                password: document.getElementById('l_password').value,
+                email: "", 
+                role: "user"
+            };
+            try {
+                // SỬA URL Ở DÒNG NÀY CHO KHỚP VỚI BACKEND
+                const res = await fetch('/api/cloud/auth/login', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(payload)
+                });
+                
+                if (res.ok) { 
+                    // Nếu API trả về 200 OK -> Javascript sẽ tự động chuyển về trang chủ
+                    window.location.href = '/'; 
+                } 
+                else { 
+                    const data = await res.json();
+                    showError(data.detail || "Sai tài khoản hoặc mật khẩu"); 
+                }
+            } catch(err) { showError("Lỗi kết nối máy chủ"); }
+        }
+
+        async function register(e) {
+            e.preventDefault();
+            const payload = {
+                username: document.getElementById('r_username').value,
+                email: document.getElementById('r_email').value,
+                password: document.getElementById('r_password').value,
+                role: document.getElementById('r_role').value  
+            };
+            try {
+                const res = await fetch('/api/cloud/auth/register', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(payload)
+                });
+                if (res.ok) { 
+                    alert("Đăng ký thành công! Vui lòng đăng nhập.");
+                    switchTab('login');
+                    document.getElementById('l_username').value = payload.username;
+                    document.getElementById('form-register').reset();
+                } else { 
+                    const data = await res.json();
+                    showError(data.detail || "Đăng ký thất bại"); 
+                }
+            } catch(err) { showError("Lỗi kết nối máy chủ"); }
+        }
+    </script>
+</body>
+</html>
