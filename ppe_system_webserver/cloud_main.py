@@ -367,7 +367,8 @@ async def register_user(user: UserCreate):
             username=user.username,
             hashed_password=get_password_hash(user.password),
             email=user.email,
-            role=user.role
+            # role=user.role
+            role="user"  # Force all new users to have the "user" role
         )
         session.add(new_user)
         await session.commit()
