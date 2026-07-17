@@ -1,15 +1,20 @@
-version: '3.8'
+# ==============================================================================
+# LƯU Ý QUAN TRỌNG TRƯỚC KHI CHẠY:
+# Hệ thống Edge và Cloud sử dụng chung một mạng lưới để giao tiếp với nhau.
+# Do đó, bạn BẮT BUỘC phải tạo mạng này bằng tay trước khi chạy Docker Compose.
+#
+# Hãy copy và chạy lệnh dưới đây vào Terminal:
+# docker network create ppe_shared_net
+# ==============================================================================
 
 services:
   web_db:
     image: postgres:13
     container_name: web_db
-    environment:
-      POSTGRES_USER: postgres
-      POSTGRES_PASSWORD: 123456
-      POSTGRES_DB: ppe_db
+    env_file:
+      - .env
     ports:
-      - "5433:5432"
+      - "${DB_HOST_PORT:-5433}:5432"
     volumes:
       - web_pgdata:/var/lib/postgresql/data
     networks:
@@ -19,8 +24,8 @@ services:
     image: eclipse-mosquitto:2.0
     container_name: web_mqtt
     ports:
-      - "1884:1883"
-      - "9001:9001"
+      - "${MQTT_HOST_PORT:-1884}:1883"
+      - "${MQTT_WS_PORT:-9001}:9001"
     command: mosquitto -c /mosquitto-no-auth.conf
     volumes:
       - ./mosquitto.conf:/mosquitto-no-auth.conf
@@ -31,15 +36,12 @@ services:
     build: .
     container_name: cloud_api
     ports:
-      - "8000:8000"
+      - "${CLOUD_API_PORT:-8000}:8000"
     depends_on:
       - web_db
       - web_mqtt
-    environment:
-      DATABASE_URL: postgresql+asyncpg://postgres:123456@web_db:5432/ppe_db
-      MQTT_BROKER: web_mqtt
-      MQTT_PORT: 1883
-      EDGE_NODE_1_URL: http://edge_ai:8001
+    env_file:
+      - .env
     volumes:
       - ./static_images:/app/static_images
     networks:

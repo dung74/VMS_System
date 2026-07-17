@@ -1,25 +1,38 @@
-version: '3.8'
+
+# ==============================================================================
+# LƯU Ý QUAN TRỌNG TRƯỚC KHI CHẠY:
+# Hệ thống Edge và Cloud sử dụng chung một mạng lưới để giao tiếp với nhau.
+# Do đó, bạn BẮT BUỘC phải tạo mạng này bằng tay trước khi chạy Docker Compose.
+#
+# Hãy copy và chạy lệnh dưới đây vào Terminal:
+# docker network create ppe_shared_net
+# ==============================================================================
 
 services:
   edge_db:
     image: postgres:13
     container_name: edge_db
-    environment:
-      POSTGRES_USER: postgres
-      POSTGRES_PASSWORD: 123456
-      POSTGRES_DB: ppe_db_edge
+    # Lấy thông số user, pass, db name từ file .env
+    env_file:
+      - .env
     ports:
-      - "5436:5432"
+      # Lấy biến DB_HOST_PORT từ .env, nếu không có thì mặc định dùng 5436
+      - "${DB_HOST_PORT:-5436}:5432"
     volumes:
       - edge_pgdata:/var/lib/postgresql/data
     networks:
       - ppe_shared_net
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d ppe_db_edge"]
+      interval: 3s
+      timeout: 3s
+      retries: 5
   
   edge_mqtt:
     image: eclipse-mosquitto:2.0
     container_name: edge_mqtt
     ports:
-      - "1885:1883"
+      - "${MQTT_HOST_PORT:-1885}:1883"
       - "9002:9001"
     command: mosquitto -c /mosquitto-no-auth.conf
     volumes:
@@ -31,23 +44,21 @@ services:
     build: .
     container_name: edge_ai
     ports:
-      - "8001:8001"
+      - "${EDGE_AI_PORT:-8001}:8001"
     depends_on:
-      - edge_db
-      - edge_mqtt
-    environment:
-      PYTHONUNBUFFERED: 1
-      DATABASE_URL: postgresql+asyncpg://postgres:123456@edge_db:5432/ppe_db_edge
-      MQTT_BROKER: edge_mqtt
-      MQTT_PORT: 1883
-      EDGE_URL: http://cloud_api:8000
+      edge_db:
+        condition: service_healthy
+      edge_mqtt:
+        condition: service_started
+    env_file:
+      - .env
     volumes:
       - .:/app 
     networks:
       - ppe_shared_net
     devices:
       - "/dev/video0:/dev/video0"
-      - "/dev/video4:/dev/video4"
+      # - "/dev/video4:/dev/video4"
 
 volumes:
   edge_pgdata:
@@ -55,4 +66,3 @@ volumes:
 networks:
   ppe_shared_net:
     external: true
-

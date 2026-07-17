@@ -2,12 +2,12 @@ import uuid
 from datetime import datetime
 from sqlalchemy.ext.asyncio import create_async_engine, AsyncSession, async_sessionmaker
 from sqlalchemy.orm import declarative_base, relationship
-from sqlalchemy import Column, Integer, String, Boolean, DateTime, ForeignKey
+from sqlalchemy import Column, Integer, String, Boolean, DateTime, ForeignKey, text
 from sqlalchemy.dialects.postgresql import UUID, JSONB
 from datetime import timezone, timedelta
 import os
-# 1. THIẾT LẬP KẾT NỐI BẤT ĐỒNG BỘ
-# Cú pháp: postgresql+asyncpg://<username>:<password>@<host>:<port>/<dbname>
+
+
 DATABASE_URL = os.getenv(
     "DATABASE_URL", 
     "postgresql+asyncpg://postgres:123456@localhost:5432/ppe_db_edge"
@@ -57,7 +57,6 @@ class Camera(Base):
 class Event(Base):
     __tablename__ = 'events'
     
-    # Sử dụng UUID tự sinh cho khóa chính
     id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
     event_code = Column(String(100), unique=True, nullable=False)
     camera_id = Column(Integer, ForeignKey('cameras.id', ondelete='CASCADE'))
@@ -67,13 +66,22 @@ class Event(Base):
     video_path = Column(String(255))
     status = Column(String(20), default='pending')
     
-    # Trường JSONB mạnh mẽ của PostgreSQL
     detections = Column(JSONB, default=list)
     metadata_info = Column(JSONB, default=dict) # Đổi tên tránh trùng keyword metadata
     
     created_at = Column(DateTime(timezone=True), default=get_vn_timezone)
 
-# Hàm tiện ích để tự động tạo bảng nếu chưa có
 async def init_db():
     async with engine.begin() as conn:
         await conn.run_sync(Base.metadata.create_all)
+    if os.path.exists("init.sql"):
+        # Đọc nội dung file
+        with open("init.sql", "r", encoding="utf-8") as f:
+            sql_commands = f.read()
+            
+        async with engine.begin() as conn:
+            for command in sql_commands.split(';'):
+                if command.strip():
+                    await conn.execute(text(command))
+        
+        print("Đã nạp dữ liệu mặc định từ file init.sql thành công!")

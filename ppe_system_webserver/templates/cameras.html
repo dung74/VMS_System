@@ -41,8 +41,7 @@
     </div>
     {% endif %}
 
-    <!-- Bảng danh sách & Live View (Tất cả đều thấy, nhưng khác nút) -->
-    <!-- Đổi thành xl:col-span-3 nếu là user thường để bảng rộng ra -->
+    <!-- Bảng danh sách & Live View -->
     <div class="{% if user.role == 'admin' %}xl:col-span-2{% else %}xl:col-span-3{% endif %} space-y-6">
         <div class="bg-gray-900 p-5 rounded-2xl border border-gray-800 shadow-lg">
             <div class="flex justify-between items-center mb-4 border-b border-gray-800 pb-2">
@@ -99,45 +98,59 @@
     }
 
     async function loadCameras() {
-        try {
-            const res = await fetch('/api/cloud/list_cameras');
-            const data = await res.json();
-            const tbody = document.getElementById('camera-list');
-            tbody.innerHTML = '';
+    try {
+        const res = await fetch('/api/cloud/list_cameras');
+        const data = await res.json();
+        const tbody = document.getElementById('camera-list');
+        tbody.innerHTML = '';
+        
+        (data.cameras || data).forEach(c => {
+            const modelStr = JSON.stringify(c.current_model_id || []);
             
-            (data.cameras || data).forEach(c => {
-                const modelStr = JSON.stringify(c.current_model_id || []);
-                
-                // MẶC ĐỊNH: Tất cả mọi người đều có 3 nút điều khiển luồng
-                let actionButtons = `
-                    <button onclick="startEdgeCamera('${c.id}')" class="bg-emerald-600 hover:bg-emerald-500 px-2 py-1.5 rounded text-xs text-white transition-colors shadow">Bật AI</button>
-                    <button onclick="openLiveView('${c.id}')" class="bg-indigo-600 hover:bg-indigo-500 px-2 py-1.5 rounded text-xs text-white transition-colors shadow">Xem</button>
-                    <button onclick="stopEdgeCamera('${c.id}')" class="bg-gray-700 hover:bg-gray-600 px-2 py-1.5 rounded text-xs text-white transition-colors shadow">Tắt</button>
+            const isViewing = document.getElementById(`vid-box-${c.id}`) !== null;
+            
+            const btnXem = isViewing 
+                ? `<button disabled class="bg-gray-800 border border-gray-700 px-2 py-1.5 rounded text-xs text-gray-400 cursor-not-allowed shadow inline-flex items-center justify-center gap-1.5 min-w-[70px]"><span class="w-1.5 h-1.5 rounded-full bg-red-500 animate-pulse"></span> Xem</button>`
+                : `<button onclick="openLiveView('${c.id}')" class="bg-indigo-600 hover:bg-indigo-500 px-2 py-1.5 rounded text-xs text-white transition-colors shadow min-w-[70px]">Xem</button>`;
+
+            let actionButtons = `
+                <button onclick="startEdgeCamera('${c.id}')" class="bg-emerald-600 hover:bg-emerald-500 px-2 py-1.5 rounded text-xs text-white transition-colors shadow">Bật AI</button>
+                ${btnXem}
+                <button onclick="stopEdgeCamera('${c.id}')" class="bg-gray-700 hover:bg-gray-600 px-2 py-1.5 rounded text-xs text-white transition-colors shadow">Tắt AI</button>
+            `;
+            
+            if (isAdmin) {
+                actionButtons += `
+                    <button onclick='editCamera(${c.id}, ${JSON.stringify(c.name)}, ${JSON.stringify(c.source)}, ${JSON.stringify(c.location)}, ${modelStr})' class="text-blue-400 hover:text-blue-300 px-2 py-1.5 font-medium text-xs">Sửa</button>
+                    <button onclick="removeCamera('${c.id}')" class="text-red-500 hover:text-red-400 px-2 py-1.5 font-medium text-xs">Xóa</button>
                 `;
-                
-                // ADMIN: Được nối thêm 2 nút quản lý (Sửa/Xóa)
-                if (isAdmin) {
-                    actionButtons += `
-                        <button onclick='editCamera(${c.id}, ${JSON.stringify(c.name)}, ${JSON.stringify(c.source)}, ${JSON.stringify(c.location)}, ${modelStr})' class="text-blue-400 hover:text-blue-300 px-2 py-1.5 font-medium text-xs">Sửa</button>
-                        <button onclick="removeCamera('${c.id}')" class="text-red-500 hover:text-red-400 px-2 py-1.5 font-medium text-xs">Xóa</button>
-                    `;
-                }
+            }
 
-                tbody.innerHTML += `
-                    <tr class="hover:bg-gray-850/50">
-                        <td class="px-4 py-3 font-mono font-bold">${c.id}</td>
-                        <td class="px-4 py-3 text-xs">
-                            <span class="text-sm font-semibold text-gray-200">${c.name}</span> <br>
-                            Nguồn: <span class="text-gray-500">${c.source}</span> | Khu: <span class="text-gray-500">${c.location}</span> <br>
-                            Models: <span class="text-purple-400">${modelStr}</span>
-                        </td>
-                        <td class="px-4 py-3 text-center space-y-1 md:space-y-0 md:space-x-1">${actionButtons}</td>
-                    </tr>`;
-            });
-        } catch (err) { console.error(err); }
-    }
+            const rowClass = isViewing ? "bg-indigo-900/10 border-l-2 border-indigo-500" : "hover:bg-gray-850/50 border-l-2 border-transparent";
+            const liveBadge = isViewing ? `<span class="ml-2 inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-bold bg-red-500/20 text-red-500 border border-red-500/30 animate-pulse">LIVE</span>` : '';
 
-    // --- BỎ KIỂM TRA isAdmin Ở 2 HÀM NÀY ĐỂ USER THƯỜNG CÓ THỂ GỌI ---
+            // SỬA Ở ĐÂY: Bọc ${actionButtons} trong thẻ div có class "flex flex-wrap items-center justify-start lg:justify-center gap-1.5"
+            tbody.innerHTML += `
+                <tr class="transition-colors ${rowClass}">
+                    <td class="px-4 py-3 font-mono font-bold">${c.id}</td>
+                    <td class="px-4 py-3 text-xs">
+                        <div class="flex items-center">
+                            <span class="text-sm font-semibold text-gray-200">${c.name}</span>
+                            ${liveBadge}
+                        </div>
+                        <div class="mt-1 text-gray-500">Nguồn: <span class="text-gray-400">${c.source}</span> | Khu: <span class="text-gray-400">${c.location}</span></div>
+                        <div class="mt-0.5">Models: <span class="text-purple-400">${modelStr}</span></div>
+                    </td>
+                    <td class="px-4 py-3">
+                        <div class="flex flex-wrap items-center justify-start xl:justify-center gap-1.5">
+                            ${actionButtons}
+                        </div>
+                    </td>
+                </tr>`;
+        });
+    } catch (err) { console.error(err); }
+}
+
     async function startEdgeCamera(id) { 
         try {
             await fetch(`/api/cloud/start_camera/${id}`, {
@@ -156,11 +169,11 @@
                 headers:{'Content-Type':'application/json'}, 
                 body: JSON.stringify({edge_id:DEFAULT_EDGE})
             }); 
-            document.getElementById(`vid-box-${id}`)?.remove(); 
+            closeLiveView(id); // Dùng hàm đóng luồng chuyên dụng để dọn dẹp UI
         } catch(e) { console.error(e); } 
     }
 
-    // Các hàm sau đây chỉ gọi được nếu là Admin
+    // Các hàm quản lý (Chỉ gọi khi Admin)
     function editCamera(id, name, source, location, modelsArray) {
         if (!isAdmin) return;
         document.getElementById('c_id').value = id;
@@ -207,7 +220,6 @@
     }
 
     function resetCameraForm() {
-        
         document.getElementById('form-camera').reset(); 
         document.getElementById('c_id').value = "";
         document.getElementById('camera-form-title').innerText = "Thêm Camera mới";
@@ -222,27 +234,50 @@
         try { await fetch(`/api/cloud/remove_camera/${id}`, { method: 'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({edge_id: DEFAULT_EDGE})}); loadCameras(); } catch(e) {}
     }
 
-    async function startEdgeCamera(id)  { await fetch(`/api/cloud/start_camera/${id}`, {method: 'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({edge_id:DEFAULT_EDGE})}); alert("Đã gửi lệnh bật!"); } 
-    async function stopEdgeCamera(id)  { await fetch(`/api/cloud/stop_camera/${id}`, {method: 'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({edge_id:DEFAULT_EDGE})}); document.getElementById(`vid-box-${id}`)?.remove(); } 
-    
-    // Luôn cho phép mọi Role xem Stream
+    // --- HÀM XỬ LÝ VIDEO TRỰC TIẾP ---
+
+    // Đóng 1 luồng view trực tiếp mà không cần tắt AI
+    function closeLiveView(id) {
+        document.getElementById(`vid-box-${id}`)?.remove();
+        
+        // Hiện lại placeholder nếu không còn video nào
+        const wall = document.getElementById('video-wall');
+        if (wall.querySelectorAll('[id^="vid-box-"]').length === 0) {
+            wall.innerHTML = '<div id="video-placeholder" class="text-gray-600 italic col-span-full py-8 text-center text-sm">Chưa có luồng WebRTC nào.</div>';
+        }
+        
+        loadCameras(); // Cập nhật lại UI bảng để trả lại nút "Xem"
+    }
+
     async function openLiveView(id) {
         const wall = document.getElementById('video-wall');
         document.getElementById('video-placeholder')?.remove();
+        
         if(!document.getElementById(`vid-box-${id}`)) {
-            // Đã thay đổi 'h-56' thành 'aspect-video' và 'object-cover' thành 'object-contain'
+            // Thêm class "group" để có thể hover hiện ra nút Tắt nhanh (X)
             wall.insertAdjacentHTML('beforeend', `
-                <div id="vid-box-${id}" class="bg-black rounded-xl border border-gray-800 overflow-hidden relative aspect-video shadow-lg border-green-500/30">
+                <div id="vid-box-${id}" class="bg-black rounded-xl border border-gray-800 overflow-hidden relative aspect-video shadow-lg border-green-500/30 group">
                     <div class="absolute top-2 left-2 bg-black/60 px-2 py-1 rounded text-xs flex items-center z-10">
-                        <span class="w-2 h-2 rounded-full bg-red-500 mr-2 live-indicator"></span>CAM-${id}
+                        <span class="w-2 h-2 rounded-full bg-red-500 mr-2 animate-pulse"></span>CAM-${id}
                     </div>
+                    
+                    <!-- Nút tắt view trực tiếp (Chỉ hiện khi di chuột vào video) -->
+                    <button onclick="closeLiveView('${id}')" class="absolute top-2 right-2 bg-black/60 hover:bg-red-600 px-2 py-1 rounded text-xs text-white z-10 opacity-0 group-hover:opacity-100 transition-opacity" title="Đóng luồng xem này">
+                        ✕ Đóng
+                    </button>
+
                     <video id="video-${id}" class="w-full h-full object-contain" autoplay playsinline muted></video>
                 </div>
             `);
+            
+            // Render lại bảng để đổi trạng thái UI của Camera thành Đang Xem
+            loadCameras(); 
         }
+        
         const pc = new RTCPeerConnection();
         pc.addEventListener('track', (evt) => document.getElementById(`video-${id}`).srcObject = evt.streams[0]);
         pc.addTransceiver('video', { direction: 'recvonly' });
+        
         try {
             const info = await (await fetch(`/api/cloud/get_stream_info/${id}`)).json();
             const offer = await pc.createOffer();
@@ -250,9 +285,10 @@
             const answer = await (await fetch(info.webrtc_offer_url, {method: 'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({sdp: pc.localDescription.sdp, type: pc.localDescription.type})})).json();
             await pc.setRemoteDescription(answer);
         } catch (e) { 
-        console.error("CHI TIẾT LỖI MẠNG/WEBRTC:", e); // <--- THÊM DÒNG NÀY
-        alert("Lỗi WebRTC: Camera có thể chưa được Admin bật luồng AI."); 
-    }
+            console.error("CHI TIẾT LỖI MẠNG/WEBRTC:", e); 
+            alert("Lỗi WebRTC: Camera có thể chưa được Admin bật luồng AI."); 
+            closeLiveView(id); // Nếu lỗi không tải được luồng thì dọn dẹp UI video luôn
+        }
     }
 </script>
 {% endblock %}

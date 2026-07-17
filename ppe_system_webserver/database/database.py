@@ -2,12 +2,11 @@ import uuid
 from datetime import datetime, timedelta, timezone
 from sqlalchemy.ext.asyncio import create_async_engine, AsyncSession, async_sessionmaker
 from sqlalchemy.orm import declarative_base, relationship
-from sqlalchemy import Column, Integer, String, Boolean, DateTime, ForeignKey
+from sqlalchemy import Column, Integer, String, Boolean, DateTime, ForeignKey, text
 from sqlalchemy.dialects.postgresql import UUID, JSONB
 import os
-# 1. THIẾT LẬP KẾT NỐI BẤT ĐỒNG BỘ
-# Cú pháp: postgresql+asyncpg://<username>:<password>@<host>:<port>/<dbname>
-# DATABASE_URL = "postgresql+asyncpg://postgres:123456@localhost:5432/ppe_db"
+
+
 DATABASE_URL = os.getenv(
     "DATABASE_URL", 
     "postgresql+asyncpg://postgres:123456@localhost:5432/ppe_db"
@@ -86,10 +85,21 @@ class User(Base):
     role = Column(String(20), default='user')  # 'admin' or 'user'
     
 
-# Hàm tiện ích để tự động tạo bảng nếu chưa có
 async def init_db():
     async with engine.begin() as conn:
         await conn.run_sync(Base.metadata.create_all)
+    
+    if os.path.exists("init.sql"):
+        # Đọc nội dung file
+        with open("init.sql", "r", encoding="utf-8") as f:
+            sql_commands = f.read()
+            
+        async with engine.begin() as conn:
+            for command in sql_commands.split(';'):
+                if command.strip():
+                    await conn.execute(text(command))
+        
+        print("Đã nạp dữ liệu mặc định từ file init.sql thành công!")
 
 
 
