@@ -230,6 +230,21 @@ Khi service khởi động, `init_db()` sẽ:
 
 ---
 
+## 12) Giao diện hiển thị
+Giao diện chính ( quản lý camera, xem stream)
+<img width="2812" height="1658" alt="Screenshot From 2026-07-17 10-37-03" src="https://github.com/user-attachments/assets/cd427b4b-3561-4e33-96a2-fbd77162ea02" />
+Quản lý sự kiện
+<img width="2380" height="1386" alt="Screenshot From 2026-07-17 10-42-57" src="https://github.com/user-attachments/assets/4baa64ed-1a5d-4172-b7d3-d6d13c79c2a6" />
+Quản lý model
+<img width="2826" height="1668" alt="Screenshot From 2026-07-17 10-43-59" src="https://github.com/user-attachments/assets/ca6865a1-a483-425b-965d-2ee0a13c9053" />
+Đăng nhập, đăng ký
+<img width="2826" height="1668" alt="Screenshot From 2026-07-17 10-44-14" src="https://github.com/user-attachments/assets/a3e319be-f91e-483d-b888-70a0e67cf476" />
+
+
+
+
+
+
 ## 11) Chạy local không Docker (tham khảo)
 
 Mỗi service cần:
