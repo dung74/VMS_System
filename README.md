@@ -77,7 +77,10 @@ ppe_system/
 
 > Cả Cloud và Edge dùng chung external network `ppe_shared_net`.
 
-### Bước 1: Tạo network dùng chung
+### Bước 1: Tạo env, network dùng chung
+```bash
+conda create -n ai_env python=3.10
+```
 
 ```bash
 docker network create ppe_shared_net
