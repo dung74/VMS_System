@@ -1,29 +1,23 @@
-# 1. Mật khẩu và Biến môi trường (TUYỆT ĐỐI KHÔNG ĐƯA LÊN GIT)
 .env
 *.env
 
-# 2. File ảnh sự kiện và log do hệ thống tự sinh ra
 ppe_system_webserver/static_images/
 static_images/
 2026-*/
 cam*/
 *.log
 
-# 3. Môi trường ảo Python (Virtualenv)
 test_env/
 venv/
 env/
 
-# 4. Các file biên dịch tự động của Python (pycache)
 __pycache__/
 *.py[cod]
 *$py.class
 *.pyo
 
-# 5. Các thư mục cấu hình của trình soạn thảo (VS Code, PyCharm)
 .vscode/
 .idea/
 
-# 6. File rác của hệ điều hành
 .DS_Store
 Thumbs.db
