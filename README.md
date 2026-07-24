@@ -7,14 +7,7 @@ Hệ thống giám sát PPE theo mô hình **Cloud - Edge AI**, gồm 3 phần c
 - **Frontend React** (`ppe_system_frontend`): giao diện quản trị (login, camera, model, events).
 # PPE System (Cloud + Edge + Frontend)
 
-README này đã được cập nhật theo cấu trúc project hiện tại.
 
-Hệ thống gồm 3 khối:
-- **Cloud API** (`ppe_system_webserver`): FastAPI, quản lý user/camera/model/event, nhận dữ liệu MQTT từ Edge.
-- **Edge AI** (`ppe_system_fastApi`): FastAPI, chạy camera + AI + WebRTC, publish event và upload ảnh về Cloud.
-- **Frontend** (`ppe_system_frontend`): React + Vite, giao diện vận hành (`/login`, `/`, `/models`, `/events`).
-
----
 
 ## 1) Kiến trúc tổng quan
 
