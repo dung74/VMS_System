@@ -1,0 +1,15 @@
+version: '3.8'
+
+services:
+  ppe_frontend:
+    build: .
+    container_name: ppe_frontend
+    ports:
+      - "3000:80" #  xem web ở http://localhost:3000
+    networks:
+      - ppe_shared_net
+    restart: unless-stopped
+
+networks:
+  ppe_shared_net:
+    external: true 

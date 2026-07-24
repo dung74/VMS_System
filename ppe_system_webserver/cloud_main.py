@@ -339,14 +339,14 @@ async def edit_model(model_id: int, payload: ModelEditRequest):
 @app.get("/api/cloud/list_events", dependencies=[Depends(require_user)])
 async def list_events(page: int = 1, limit: int = 10):
     offset = (page - 1) * limit
+    async with AsyncSessionLocal() as session:
+        total_query = await session.execute(select(Event.id))
+        total_events = total_query.scalars().all()
 
-    total_query = await AsyncSessionLocal().execute(select(Event.id))
-    total_events = total_query.scalars().all()
-
-    event_query = await AsyncSessionLocal().execute(
-        select(Event).order_by(Event.created_at.desc()).offset(offset).limit(limit)
-    )
-    events = event_query.scalars().all()
+        event_query = await session.execute(
+            select(Event).order_by(Event.created_at.desc()).offset(offset).limit(limit)
+        )
+        events = event_query.scalars().all()
 
     total_pages = (len(total_events) + limit - 1) //limit
 
@@ -389,7 +389,13 @@ async def login_user(response: Response, user: UserCreate):
         access_token = create_access_token(data={"sub": db_user.username, "role": db_user.role})
         response.set_cookie(key="access_token", value=f"Bearer {access_token}", httponly=True, max_age=86400)  # 1 day in seconds
         return {"message": "Login successful", "access_token": access_token, "token_type": "bearer", "role": db_user.role}
+
+@app.get("/api/cloud/auth/me", dependencies=[Depends(require_user)])
+async def get_current_user_info(current_user: User = Depends(get_current_user)):
+    if not current_user:
+        raise HTTPException(status_code=401, detail="Could not validate credentials")
     
+    return {"username": current_user.username, "email": current_user.email, "role": current_user.role}
 
 
 @app.post("/api/cloud/auth/logout")
