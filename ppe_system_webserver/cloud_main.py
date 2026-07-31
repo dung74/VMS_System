@@ -48,7 +48,4 @@ app.include_router(api_auth.router)
 app.include_router(api_cameras.router)
 app.include_router(api_models.router)
 app.include_router(api_events.router)
-<<<<<<< HEAD
-=======
 app.include_router(api_users.router)
->>>>>>> dung_branch
