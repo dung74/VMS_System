@@ -1,4 +1,4 @@
-# PPE System
+# VMS System
 
 Hệ thống giám sát camera phân tán gồm Cloud API, Edge AI và giao diện web. Cloud quản lý người dùng, camera, model và sự kiện; Edge lấy cấu hình từ Cloud, chạy nhận diện YOLO trên luồng camera, phát WebRTC và gửi sự kiện/ảnh về Cloud.
 
