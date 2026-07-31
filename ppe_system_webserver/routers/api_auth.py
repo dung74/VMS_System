@@ -9,21 +9,6 @@ from core.auth import get_password_hash, verify_password, create_access_token, g
 
 router = APIRouter(prefix="/api/cloud/auth", tags=["Auth"])
 
-@router.post("/register")
-async def register_user(user: UserCreate, db: AsyncSession = Depends(get_db)):
-    result = await db.execute(select(User).where(User.username == user.username))
-    if result.scalars().first():
-        raise HTTPException(status_code=400, detail="Username already exists")
-    
-    new_user = User(
-        username=user.username,
-        hashed_password=get_password_hash(user.password),
-        email=user.email,
-        role="user" 
-    )
-    db.add(new_user)
-    await db.commit()
-    return {"message": "User registered successfully", "username": new_user.username, "role": new_user.role}
 
 @router.post("/login")
 async def login_user(response: Response, user: UserCreate, db: AsyncSession = Depends(get_db)):

@@ -4,6 +4,7 @@ import Auth from './pages/Auth';
 import Cameras from './pages/Cameras';
 import Models from './pages/Models';
 import Events from './pages/Events';
+import Users from './pages/Users';
 
 export default function App() {
   return (
@@ -14,6 +15,8 @@ export default function App() {
           <Route index element={<Cameras />} />
           <Route path="models" element={<Models />} />
           <Route path="events" element={<Events />} />
+          <Route path="users" element={<Users />} />
+
         </Route>
       </Routes>
     </BrowserRouter>

@@ -1,293 +1,183 @@
-# PPE System (Cloud + Edge + Frontend)
+# PPE System
 
-Hệ thống giám sát PPE theo mô hình **Cloud - Edge AI**, gồm 3 phần chính:
+Hệ thống giám sát camera phân tán gồm Cloud API, Edge AI và giao diện web. Cloud quản lý người dùng, camera, model và sự kiện; Edge lấy cấu hình từ Cloud, chạy nhận diện YOLO trên luồng camera, phát WebRTC và gửi sự kiện/ảnh về Cloud.
 
-- **Cloud WebServer** (`ppe_system_webserver`): quản lý user/camera/model, nhận sự kiện từ Edge, lưu ảnh sự kiện, cung cấp API.
-- **Edge FastAPI** (`ppe_system_fastApi`): chạy AI theo camera, stream WebRTC, publish sự kiện MQTT, upload ảnh về Cloud.
-- **Frontend React** (`ppe_system_frontend`): giao diện quản trị (login, camera, model, events).
-# PPE System (Cloud + Edge + Frontend)
-
-
-
-## 1) Kiến trúc tổng quan
+## Thành phần và luồng dữ liệu
 
 ```text
-Frontend React (Vite)
-        |
-        v
-Cloud API (FastAPI) <----- MQTT -----> Edge AI (FastAPI)
-        |                                   |
-        v                                   v
-   Cloud PostgreSQL                    Edge PostgreSQL
-        ^
-        |
-  Ảnh sự kiện upload từ Edge
+React + Vite / Nginx
+        │ HTTP / WebRTC signaling
+        ▼
+Cloud API ── PostgreSQL (Cloud) ── static_images/
+   ▲  │
+   │  └──── MQTT (web_mqtt) ⇄ MQTT bridge ⇄ MQTT (edge_mqtt)
+   │                                             │
+   └────────── ảnh sự kiện qua HTTP ─────────────┤
+                                                 ▼
+                                      Edge AI + PostgreSQL (Edge)
+                                                 │
+                                      Camera / RTSP + YOLO + WebRTC
 ```
 
-Luồng chính:
-1. Cloud quản lý cấu hình camera/model.
-2. Edge định kỳ gửi yêu cầu đồng bộ qua MQTT.
-3. Cloud publish cấu hình cho Edge qua MQTT.
-4. Edge chạy detection, publish event MQTT và upload ảnh lên Cloud.
-5. Frontend hiển thị camera/model/sự kiện qua Cloud API.
-Frontend React (Vite)
-        |
-        v
-Cloud API (FastAPI) <----- MQTT -----> Edge AI (FastAPI)
-        |                                   |
-        v                                   v
-   Cloud PostgreSQL                    Edge PostgreSQL
-        ^
-        |
-  Ảnh sự kiện upload từ Edge
-```
+- Edge gửi yêu cầu đồng bộ định kỳ 30 giây qua MQTT. Cloud trả về toàn bộ camera đang `active` và model đang `is_active`; Edge ghi đè dữ liệu camera/model cục bộ theo gói đồng bộ.
+- Khi một camera được bật từ Cloud, Cloud gọi Edge qua HTTP. Edge đọc camera/RTSP, chạy các model gắn với camera, vẽ detection lên frame và phát frame bằng WebRTC.
+- Với detection mới theo `track_id`, Edge publish sự kiện vào `ppe/events/{camera_id}` và upload ảnh JPEG lên Cloud. Cloud lưu event, ảnh và phục vụ ảnh dưới `/media/...`.
 
-Luồng chính:
-1. Edge định kỳ gửi yêu cầu sync cấu hình qua MQTT.
-2. Cloud publish config camera/model cho Edge.
-3. Edge chạy detection theo cấu hình local.
-4. Edge publish event qua MQTT topic `ppe/events/#`.
-5. Edge upload ảnh event về `POST /api/cloud/upload_image`.
-6. Frontend lấy dữ liệu từ Cloud API để hiển thị.
-
----
-
-## 2) Cấu trúc thư mục
+## Cấu trúc thư mục
 
 ```text
 ppe_system/
-├── ppe_system_webserver/     # Cloud service (FastAPI + Jinja2 templates)
-│   ├── cloud_main.py
-│   ├── core/
-│   ├── database/
-│   ├── templates/
-│   ├── static_images/
-│   ├── init.sql
-├── ppe_system_webserver/
-│   ├── cloud_main.py                # Entry Cloud API
-│   ├── routers/                     # API routers (auth/cameras/models/events)
-│   ├── services/                    # MQTT listener service
-│   ├── schemas/                     # Pydantic request schemas
-│   ├── core/                        # auth, config, mqtt config handler
-│   ├── database/                    # SQLAlchemy models + deps + init
-│   ├── static_images/               # Lưu ảnh sự kiện
-│   ├── templates/                   # Template cũ (không mount route trong cloud_main hiện tại)
-│   ├── init.sql
-│   ├── docker-compose.yaml
-│   └── .env.sample
-├── ppe_system_fastApi/       # Edge service (FastAPI + AI + WebRTC)
-│   ├── edge_main.py
-│   ├── core/
-│   ├── ai_models/
-│   ├── database/
-│   ├── init.sql
-├── ppe_system_fastApi/
-│   ├── edge_main.py                 # Entry Edge API
-│   ├── core/                        # Camera thread, frame buffer, MQTT sync
-│   ├── ai_models/                   # person_card, cell_phone, person_only...
-│   ├── database/                    # SQLAlchemy models + init
-│   ├── init.sql
-│   ├── docker-compose.yaml
-│   └── .env.sample
-├── ppe_system_frontend/
-│   ├── src/
-│   ├── package.json
-│   ├── Dockerfile
-│   └── nginx.conf
-└── createdb.sql
+├── ppe_system_webserver/        # (BE)Cloud FastAPI, DB, MQTT listener và ảnh sự kiện
+├── ppe_system_fastApi/          # (BE_AI)Edge FastAPI, nhận diện YOLO, WebRTC và MQTT bridge
+├── ppe_system_frontend/         # (FE)React 19 + Vite + Tailwind
+├── createdb.sql                 # Schema SQL cũ,  
 ```
 
----
+Các model có sẵn ở `ppe_system_fastApi/models/`: `best(33).pt`, `yolov8m.pt`, `yolov8n.pt` và `yolo11n.pt`.
 
-## 3) Công nghệ sử dụng
+## Yêu cầu
 
-### Cloud/Edge
-- Python 3.10
-- FastAPI + Uvicorn
-- SQLAlchemy async + asyncpg + PostgreSQL
-- aiomqtt
-- aiortc + av (WebRTC)
-- OpenCV + Ultralytics YOLO (Edge)
+- Docker Engine kèm Docker Compose plugin để chạy các service.
+- Camera tương thích OpenCV hoặc URL RTSP để Edge nhận luồng.
+- Nếu chạy Edge trong Docker với webcam vật lý, máy chủ phải có `/dev/video0`; Compose đã map thiết bị này vào container.
 
-### Frontend
-- React 19 + Vite 8
-- react-router-dom
-- axios
-- Tailwind CSS
+## Chạy bằng Docker
 
----
+Từ thư mục gốc, tạo network dùng chung một lần:
 
-## 4) Chạy bằng Docker (khuyến nghị)
-
-### Bước 1: Tạo network dùng chung
 ```bash
 docker network create ppe_shared_net
 ```
 
-### Bước 2: Chuẩn bị env
+Tạo file cấu hình nếu chưa có:
+
 ```bash
 cp ppe_system_webserver/.env.sample ppe_system_webserver/.env
 cp ppe_system_fastApi/.env.sample ppe_system_fastApi/.env
 ```
 
-### Bước 3: Chạy Cloud
+Điền giá trị database phù hợp trong hai file `.env`. Với hai Compose chạy cùng một máy và cùng network, giữ các hostname nội bộ mặc định:
+
+- Cloud: `DATABASE_URL=...@web_db:5432/ppe_db`, `MQTT_BROKER=web_mqtt`, `EDGE_NODE_1_URL=http://edge_ai:8001`.
+- Edge: `DATABASE_URL=...@edge_db:5432/ppe_db_edge`, `MQTT_BROKER=edge_mqtt`, `EDGE_URL=http://cloud_api:8000`.
+
+Khởi động Cloud trước, rồi Edge:
+
 ```bash
 cd ppe_system_webserver
 docker compose up -d --build
-```
 
-Mặc định:
-- Cloud API: `http://localhost:8000`
-- Cloud DB: `5433`
-- Cloud MQTT: `1884`
-
-### Bước 4: Chạy Edge
-```bash
-cd ppe_system_fastApi
+cd ../ppe_system_fastApi
 docker compose up -d --build
 ```
 
-Mặc định:
-- Edge API: `http://localhost:8001`
-- Edge DB: `5436`
-- Edge MQTT: `1885`
+Chạy Frontend bằng Compose (cũng dùng network trên):
 
-### Bước 5: Chạy Frontend
+```bash
+cd ../ppe_system_frontend
+docker compose up -d --build
+```
 
-**Local dev**
+Các cổng mặc định:
+
+| Service | Địa chỉ |
+| --- | --- |
+| Cloud API | `http://localhost:8000` |
+| Cloud PostgreSQL | `localhost:5433` |
+| Cloud MQTT | `localhost:1884` |
+| Edge API | `http://localhost:8001` |
+| Edge PostgreSQL | `localhost:5436` |
+| Edge MQTT | `localhost:1885` |
+| Frontend Docker | `http://localhost:3000` |
+
+Lần khởi động đầu tiên, mỗi API tạo bảng từ SQLAlchemy rồi chạy `init.sql` cùng thư mục để seed model, camera và user nếu ID chưa tồn tại. Các volume PostgreSQL được giữ lại giữa các lần `docker compose down` thông thường.
+
+## Chạy Frontend khi phát triển
+
 ```bash
 cd ppe_system_frontend
 npm install
 npm run dev
 ```
-Truy cập: `http://localhost:5173`  
-(Vite proxy `/api/cloud` -> `http://localhost:8000`)
 
-**Docker**
-```bash
-cd ppe_system_frontend
-docker build -t ppe_frontend .
-docker run -d --name ppe_frontend --network ppe_shared_net -p 8080:80 ppe_frontend
-```
-Truy cập: `http://localhost:8080`
+Vite phục vụ ứng dụng tại `http://localhost:5173` và proxy `/api/cloud` đến `http://localhost:8000`. Bản Docker dùng Nginx, chuyển mọi request `/api/` đến container `cloud_api:8000` và hỗ trợ SPA fallback.
 
----
+## API đang được mount
 
-## 5) Biến môi trường quan trọng
+Cloud API không mount các HTML template cũ trong `templates/`; giao diện chính là React frontend. Cloud có CORS mở cho mọi origin và sử dụng cookie `access_token`/JWT cho các endpoint bảo vệ.
 
-### Cloud (`ppe_system_webserver/.env`)
-- `POSTGRES_USER`, `POSTGRES_PASSWORD`, `POSTGRES_DB`
-- `DB_HOST_PORT` (default `5433`)
-- `MQTT_HOST_PORT` (default `1884`)
-- `MQTT_BROKER` (`web_mqtt` khi chạy Docker)
-- `MQTT_PORT` (`1883` nội bộ)
-- `EDGE_NODE_1_URL` (vd `http://edge_ai:8001`)
-- `CLOUD_API_PORT` (default `8000`)
+### Xác thực
 
-### Edge (`ppe_system_fastApi/.env`)
-- `POSTGRES_USER`, `POSTGRES_PASSWORD`, `POSTGRES_DB`
-- `DB_HOST_PORT` (default `5436`)
-- `MQTT_HOST_PORT` (default `1885`)
-- `MQTT_BROKER` (`edge_mqtt` khi chạy Docker)
-- `MQTT_PORT` (`1883` nội bộ)
-- `EDGE_URL` (vd `http://cloud_api:8000`)
-- `EDGE_AI_PORT` (default `8001`)
+| Phương thức | Endpoint | Quyền |
+| --- | --- | --- |
+| POST | `/api/cloud/auth/login` | Công khai |
+| GET | `/api/cloud/auth/me` | User đã đăng nhập |
+| POST | `/api/cloud/auth/logout` | Công khai |
 
----
+`POST /api/cloud/auth/register` không tồn tại trong mã hiện tại. Dữ liệu seed có tài khoản `admin1`; mật khẩu mặc định được ghi trong source trước đây là `123456`. Hãy thay đổi thông tin đăng nhập và khóa JWT trước khi triển khai thực tế.
 
-## 6) API hiện có
+### Camera và stream
 
-### Cloud
-**Auth**
-- `POST /api/cloud/auth/register`
-- `POST /api/cloud/auth/login`
-- `GET /api/cloud/auth/me`
-- `POST /api/cloud/auth/logout`
+| Phương thức | Endpoint | Quyền |
+| --- | --- | --- |
+| GET | `/api/cloud/list_cameras` | User |
+| POST | `/api/cloud/add_camera` | Admin |
+| PATCH | `/api/cloud/edit_camera/{camera_id}` | Admin |
+| POST | `/api/cloud/remove_camera/{camera_id}` | Admin |
+| POST | `/api/cloud/start_camera/{camera_id}` | User |
+| POST | `/api/cloud/stop_camera/{camera_id}` | User |
+| GET | `/api/cloud/get_stream_info/{camera_id}` | User |
+| POST | `/api/edge/start_camera/{camera_id}` | Edge |
+| POST | `/api/edge/stop_camera/{camera_id}` | Edge |
+| POST | `/offer/{camera_id}` | Edge WebRTC signaling |
 
-**Cameras**
-- `GET /api/cloud/list_cameras`
-- `POST /api/cloud/add_camera`
-- `PATCH /api/cloud/edit_camera/{camera_id}`
-- `POST /api/cloud/remove_camera/{camera_id}`
-- `POST /api/cloud/start_camera/{camera_id}`
-- `POST /api/cloud/stop_camera/{camera_id}`
-- `GET /api/cloud/get_stream_info/{camera_id}`
+Start/stop từ Cloud nhận body `{"edge_id":"edge_node_1"}`. `get_stream_info` hiện trả về URL WebRTC cố định `http://127.0.0.1:8001/offer/{camera_id}`, vì vậy trình duyệt phải truy cập được Edge qua địa chỉ này. Nếu Cloud/Edge/người dùng nằm khác máy, URL này chưa được cấu hình qua biến môi trường.
 
-**Models**
-- `GET /api/cloud/list_models`
-- `POST /api/cloud/add_model`
-- `PATCH /api/cloud/edit_model/{model_id}`
-- `POST /api/cloud/remove_model/{model_id}`
+### Model, sự kiện và người dùng
 
-**Events**
-- `GET /api/cloud/list_events`
-- `POST /api/cloud/upload_image`
+| Phương thức | Endpoint | Quyền |
+| --- | --- | --- |
+| GET | `/api/cloud/list_models` | User |
+| POST | `/api/cloud/add_model` | Admin |
+| PATCH | `/api/cloud/edit_model/{model_id}` | Admin |
+| POST | `/api/cloud/remove_model/{model_id}` | Admin |
+| GET | `/api/cloud/list_events?page=1&limit=10` | User |
+| POST | `/api/cloud/upload_image` | Công khai, multipart |
+| GET | `/api/cloud/users/` | Admin |
+| POST | `/api/cloud/users/` | Admin |
+| DELETE | `/api/cloud/users/{user_id}` | Admin |
 
-### Edge
-- `POST /api/edge/sync_model`
-- `POST /api/edge/start_camera/{camera_id}`
-- `POST /api/edge/stop_camera/{camera_id}`
-- `POST /offer/{camera_id}` (WebRTC signaling)
+Edge còn có `POST /api/edge/sync_model`, tải model theo URL ở background. Endpoint này độc lập với luồng MQTT và hiện không được Frontend gọi.
 
----
+## Giao diện
 
-## 7) Frontend routes
+Sau khi đăng nhập, Frontend cung cấp các route:
 
-Theo `ppe_system_frontend/src/App.jsx`:
-- `/login`
-- `/`
-- `/models`
-- `/events`
+- `/` — danh sách camera; admin có thể thêm/sửa/xóa camera, mọi user đã đăng nhập có thể bật/tắt AI và mở video WebRTC.
+- `/models` — xem model; admin có thể thêm/sửa/xóa.
+- `/events` — danh sách event phân trang, phóng to ảnh và xem JSON detections.
+- `/users` — chỉ hiển thị liên kết cho admin, tạo/xóa người dùng; không cho xóa user `admin1`.
 
----
+Edge hỗ trợ ba `type` model thông qua `ModelFactory`: `person_card`, `cell_phone` và `person_only`. Cả ba dùng Ultralytics YOLO tracking (ByteTrack) trên CPU.
 
-## 8) AI models hiện hỗ trợ (Edge)
+## Lưu ý về trạng thái hiện tại
 
-- `person_card`
-- `cell_phone`
-- `person_only`
+- Hai Mosquitto broker đều cho phép anonymous access. Edge bridge toàn bộ topic (`topic # both 0`) sang Cloud broker.
+- Sự kiện được lọc theo `track_id` với khoảng cách tối thiểu 2 giây; thư mục ảnh quá 3 ngày được dọn khi Cloud nhận upload ảnh mới.
+- Cloud `requirements.txt` hiện có dòng `python-multipartaiofiles` thay vì dependency `python-multipart` cần cho `UploadFile`/`Form`. Nếu container Cloud không khởi động được do multipart, đây là lỗi dependency của source hiện tại, không phải bước cấu hình bị thiếu.
+- Trường chọn model của form Camera trong Frontend dùng tên `current_model`, trong khi Cloud schema nhận `current_model_id`. Vì vậy việc gắn model từ form hiện có thể không được lưu đúng; có thể kiểm tra/chỉnh API trực tiếp nếu cần.
+- `createdb.sql` mô tả schema cũ, khác ORM hiện tại. Cơ chế khởi tạo đang dùng là `database/database.py` và `init.sql` trong từng service.
 
----
+## Chạy API trực tiếp (tham khảo)
 
-## 9) Seed dữ liệu
+Các lệnh này cần PostgreSQL, MQTT, biến môi trường và model/camera được chuẩn bị thủ công; Docker Compose là cách chạy được cấu hình sẵn trong repository.
 
-Khi service khởi động:
-1. `init_db()` tạo bảng nếu chưa có.
-2. Nạp dữ liệu từ `init.sql` nếu file tồn tại.
-
----
-
-## 10) Chạy local không Docker (tham khảo)
-
-### Cloud
 ```bash
 cd ppe_system_webserver
 pip install -r requirements.txt
 uvicorn cloud_main:app --host 0.0.0.0 --port 8000
-```
 
-### Edge
-```bash
-cd ppe_system_fastApi
+cd ../ppe_system_fastApi
 pip install -r requirements.txt
 uvicorn edge_main:app --host 0.0.0.0 --port 8001
 ```
-
-### Frontend
-```bash
-cd ppe_system_frontend
-npm install
-npm run dev
-```
-
----
-
-## 11) Ghi chú vận hành
-
-- Edge cần mount thiết bị camera (`/dev/video0`...).
-- Nếu Cloud và Edge chạy khác máy, cập nhật `EDGE_NODE_1_URL` và `EDGE_URL` theo IP/domain thật.
-- Ảnh sự kiện lưu trong `ppe_system_webserver/static_images/`.
-- Trong bản Cloud hiện tại, route template page trong `pages.py` đang được comment; luồng UI chính là frontend React.
-
-Tk ADMIN: admin1
-password: 123456
