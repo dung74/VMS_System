@@ -76,6 +76,11 @@ export default function Layout() {
                     <NavLink to="/" className={({ isActive }) => `py-3 border-b-2 transition-all ${isActive ? 'border-blue-500 text-blue-500' : 'border-transparent hover:text-gray-200'}`}>📹 Quản lý Camera</NavLink>
                     <NavLink to="/models" className={({ isActive }) => `py-3 border-b-2 transition-all ${isActive ? 'border-blue-500 text-blue-500' : 'border-transparent hover:text-gray-200'}`}>📦 Quản lý Model</NavLink>
                     <NavLink to="/events" className={({ isActive }) => `py-3 border-b-2 transition-all ${isActive ? 'border-blue-500 text-blue-500' : 'border-transparent hover:text-gray-200'}`}>🚨 Quản lý Sự kiện</NavLink>
+                    {user.role === 'admin' && (
+                        <NavLink to="/users" className={({ isActive }) => `py-3 border-b-2 transition-all ${isActive ? 'border-blue-500 text-blue-500' : 'border-transparent hover:text-gray-200'}`}>
+                            👥 Quản lý người dùng
+                        </NavLink>
+                    )}
                 </nav>
             </header>
 

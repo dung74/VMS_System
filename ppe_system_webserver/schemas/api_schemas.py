@@ -20,6 +20,20 @@ class UserCreate(BaseModel):
     password: str
     email: Optional[str] = None
     role: str = "user"
+class UserResponse(BaseModel):
+    id: int
+    username: str
+    email: Optional[str] = None
+    role: str
+
+    class Config:
+        orm_mode = True
+
+class UserUpdate(BaseModel):
+    username: Optional[str] = None
+    password: Optional[str] = None
+    email: Optional[str] = None
+    role: Optional[str] = None
 
 class ActionRequest(BaseModel):
     edge_id: str

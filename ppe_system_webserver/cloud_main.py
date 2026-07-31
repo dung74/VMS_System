@@ -9,7 +9,7 @@ from database.database import init_db
 from core.server_MQTT_sync import mqtt_config_handler
 from services.mqtt_service import mqtt_listener_loop
 
-from routers import pages, api_auth, api_cameras, api_events, api_models
+from routers import pages, api_auth, api_cameras, api_events, api_models, api_users
 
 
 @asynccontextmanager
@@ -48,3 +48,4 @@ app.include_router(api_auth.router)
 app.include_router(api_cameras.router)
 app.include_router(api_models.router)
 app.include_router(api_events.router)
+app.include_router(api_users.router)
