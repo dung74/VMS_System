@@ -27,13 +27,13 @@ Cloud API ── PostgreSQL (Cloud) ── static_images/
 
 ```text
 ppe_system/
-├── ppe_system_webserver/        # (BE)Cloud FastAPI, DB, MQTT listener và ảnh sự kiện
-├── ppe_system_fastApi/          # (BE_AI)Edge FastAPI, nhận diện YOLO, WebRTC và MQTT bridge
-├── ppe_system_frontend/         # (FE)React 19 + Vite + Tailwind
+├── Backend/        # (BE)Cloud FastAPI, DB, MQTT listener và ảnh sự kiện
+├── Edge_ai/          # (BE_AI)Edge FastAPI, nhận diện YOLO, WebRTC và MQTT bridge
+├── Frontend/         # (FE)React 19 + Vite + Tailwind
 ├── createdb.sql                 # Schema SQL cũ,  
 ```
 
-Các model có sẵn ở `ppe_system_fastApi/models/`: `best(33).pt`, `yolov8m.pt`, `yolov8n.pt` và `yolo11n.pt`.
+Các model có sẵn ở `Edge_ai/models/`: `best(33).pt`, `yolov8m.pt`, `yolov8n.pt` và `yolo11n.pt`.
 
 ## Yêu cầu
 
@@ -52,8 +52,8 @@ docker network create ppe_shared_net
 Tạo file cấu hình nếu chưa có:
 
 ```bash
-cp ppe_system_webserver/.env.sample ppe_system_webserver/.env
-cp ppe_system_fastApi/.env.sample ppe_system_fastApi/.env
+cp Backend/.env.sample Backend/.env
+cp Edge_ai/.env.sample Edge_ai/.env
 ```
 
 Điền giá trị database phù hợp trong hai file `.env`. Với hai Compose chạy cùng một máy và cùng network, giữ các hostname nội bộ mặc định:
@@ -64,17 +64,17 @@ cp ppe_system_fastApi/.env.sample ppe_system_fastApi/.env
 Khởi động Cloud trước, rồi Edge:
 
 ```bash
-cd ppe_system_webserver
+cd Backend
 docker compose up -d --build
 
-cd ../ppe_system_fastApi
+cd ../Edge_ai
 docker compose up -d --build
 ```
 
 Chạy Frontend bằng Compose (cũng dùng network trên):
 
 ```bash
-cd ../ppe_system_frontend
+cd ../Frontend
 docker compose up -d --build
 ```
 
@@ -95,7 +95,7 @@ Lần khởi động đầu tiên, mỗi API tạo bảng từ SQLAlchemy rồi 
 ## Chạy Frontend khi phát triển
 
 ```bash
-cd ppe_system_frontend
+cd Frontend
 npm install
 npm run dev
 ```
@@ -173,11 +173,11 @@ Edge hỗ trợ ba `type` model thông qua `ModelFactory`: `person_card`, `cell_
 Các lệnh này cần PostgreSQL, MQTT, biến môi trường và model/camera được chuẩn bị thủ công; Docker Compose là cách chạy được cấu hình sẵn trong repository.
 
 ```bash
-cd ppe_system_webserver
+cd Backend
 pip install -r requirements.txt
 uvicorn cloud_main:app --host 0.0.0.0 --port 8000
 
-cd ../ppe_system_fastApi
+cd ../Edge_ai
 pip install -r requirements.txt
 uvicorn edge_main:app --host 0.0.0.0 --port 8001
 ```
